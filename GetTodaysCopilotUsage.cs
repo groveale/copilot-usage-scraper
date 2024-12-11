@@ -38,7 +38,7 @@ namespace groverale
             if (reportSettings.DisplayConcealedNames.Value)
             {
                 _logger.LogInformation("Setting report settings to display names...");
-                _graphService.SetReportAnonSettingsAsync(false);
+                await _graphService.SetReportAnonSettingsAsync(false);
             }
             else
             {
@@ -50,10 +50,10 @@ namespace groverale
             _logger.LogInformation($"Usage data: {usageData.Count}");
     
             // Set the report settings back to hide names (if hidden)
-            if (!reportSettings.DisplayConcealedNames.Value)
+            if (reportSettings.DisplayConcealedNames.Value)
             {
                 _logger.LogInformation("Setting report settings back to hide names...");
-                _graphService.SetReportAnonSettingsAsync(true);
+                await _graphService.SetReportAnonSettingsAsync(true);
             }
 
             var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(usageData);
