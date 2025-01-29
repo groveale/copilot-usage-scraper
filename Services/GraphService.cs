@@ -15,6 +15,10 @@ namespace groveale.Services
         Task<List<M365CopilotUsage>> GetM365CopilotUsageReportAsyncJSON(Microsoft.Extensions.Logging.ILogger _logger);
         Task SetReportAnonSettingsAsync(bool displayConcealedNames);
         Task<AdminReportSettings> GetReportAnonSettingsAsync();
+
+        Task<ChatMessage> SendChatMessageToUserAsync(string message, string chatId);
+
+        Task<string> CreateChatAsync(string userId);
     }
 
     public class GraphService : IGraphService
@@ -116,6 +120,72 @@ namespace groveale.Services
         {
             var result = await _graphServiceClient.Admin.ReportSettings.GetAsync();
             return result;
+        }
+
+        public async Task<ChatMessage> SendChatMessageToUserAsync(string message, string chatId)
+        {
+            var requestBody = new ChatMessage
+            {
+                Body = new ItemBody
+                {
+                    Content = message,
+                },
+            };
+
+            return await _graphServiceClient.Chats[chatId].Messages.PostAsync(requestBody);
+        }
+
+        public async Task<string> CreateChatAsync(string userId)
+        {
+            var requestBody = new Chat
+            {
+                ChatType = ChatType.OneOnOne,
+                Topic = "Copilot Reminder Service",
+                Members = new List<ConversationMember>
+                {
+                    new AadUserConversationMember
+                    {
+                        OdataType = "#microsoft.graph.aadUserConversationMember",
+                        Roles = new List<string>
+                        {
+                            "owner",
+                        },
+                        AdditionalData = new Dictionary<string, object>
+                        {
+                            {
+                                "user@odata.bind" , "https://graph.microsoft.com/v1.0/users('8b081ef6-4792-4def-b2c9-c363a1bf41d5')"
+                            },
+                        },
+                    },
+                    new AadUserConversationMember
+                    {
+                        OdataType = "#microsoft.graph.aadUserConversationMember",
+                        Roles = new List<string>
+                        {
+                            "owner",
+                        },
+                        AdditionalData = new Dictionary<string, object>
+                        {
+                            {
+                                "user@odata.bind" , $"https://graph.microsoft.com/v1.0/users('{userId}')"
+                            },
+                        },
+                    },
+                },
+            };
+
+            try 
+            {
+                Chat result = await _graphServiceClient.Chats.PostAsync(requestBody);
+                return result.Id;
+            }
+            catch
+            {
+                //Todo Add logger
+                //_logger.LogInformation("Error creating chat");
+                return null;
+            }
+
         }
     }
 

@@ -30,10 +30,11 @@ namespace groveale.Services
         {
             // Need to craft the message...
             // But for now, just add the users email and message to say please ensure you use Copilot today
-            var messageObject = new
-            {
-                Email = user.UPN,
-                Message = "Please ensure you use Copilot today"
+            // Todo - hardcoded for demo purposes
+            var messageObject = new QueueMessage{
+                UserId = "5acd72ef-a0e5-455b-9a6d-8033562cf8b3",
+                MessageText = "Please ensure you use Copilot today",
+                chatId = "19:5acd72ef-a0e5-455b-9a6d-8033562cf8b3_fa936341-b3df-4ea2-98db-66ce0f3fbdcd@unq.gbl.spaces/messages"
             };
 
             string message = JsonConvert.SerializeObject(messageObject);
