@@ -14,6 +14,7 @@ builder.ConfigureFunctionsWebApplication();
 
 builder.Services.AddSingleton<IGraphService, GraphService>();
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
-builder.Services.AddSingleton<IStorageSnapshotService, StorageSnapshotService>();
+builder.Services.AddSingleton<ICopilotUsageSnapshotService, CopilotUsageSnapshotService>();
+builder.Services.AddSingleton<IQueueService, QueueService>();
 
 builder.Build().Run();

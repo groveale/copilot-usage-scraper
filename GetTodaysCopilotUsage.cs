@@ -10,10 +10,10 @@ namespace groverale
         private readonly ILogger _logger;
         private readonly IGraphService _graphService;
         private readonly ISettingsService _settingsService;
-        private readonly IStorageSnapshotService _storageSnapshotService;
+        private readonly ICopilotUsageSnapshotService _storageSnapshotService;
 
 
-        public GetTodaysCopilotUsage(ILoggerFactory loggerFactory, IGraphService graphService, ISettingsService settingsService, IStorageSnapshotService storageSnapshotService)
+        public GetTodaysCopilotUsage(ILoggerFactory loggerFactory, IGraphService graphService, ISettingsService settingsService, ICopilotUsageSnapshotService storageSnapshotService)
         {
             _graphService = graphService;
             _settingsService = settingsService;
