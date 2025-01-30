@@ -27,7 +27,7 @@ namespace groveale
             _logger.LogInformation("Sending message to user...");
 
             // Serialize the message to get the user email
-            var queueMessage = JsonConvert.DeserializeObject<QueueMessage>(message.MessageText);
+            var queueMessage = JsonConvert.DeserializeObject<CopilotQueueMessage>(message.MessageText);
 
             if (String.IsNullOrWhiteSpace(queueMessage.chatId))
             {
