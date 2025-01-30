@@ -34,7 +34,7 @@ namespace groveale.Services
             var messageObject = new CopilotQueueMessage{
                 UserId = "5acd72ef-a0e5-455b-9a6d-8033562cf8b3",
                 MessageText = "Please ensure you use Copilot today",
-                chatId = "19:5acd72ef-a0e5-455b-9a6d-8033562cf8b3_fa936341-b3df-4ea2-98db-66ce0f3fbdcd@unq.gbl.spaces/messages"
+                chatId = "19:5acd72ef-a0e5-455b-9a6d-8033562cf8b3_fa936341-b3df-4ea2-98db-66ce0f3fbdcd@unq.gbl.spaces"
             };
 
             string message = JsonConvert.SerializeObject(messageObject);

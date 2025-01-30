@@ -6,6 +6,7 @@ using Microsoft.Graph.Beta.Models;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Kiota.Abstractions.Authentication;
 
 namespace groveale.Services
 {
@@ -31,16 +32,21 @@ namespace groveale.Services
         {
             //_defaultCredential = new DefaultAzureCredential();
 
-             _clientSecretCredential = new ClientSecretCredential(
-                System.Environment.GetEnvironmentVariable("AZURE_TENANT_ID"), 
-                System.Environment.GetEnvironmentVariable("AZURE_CLIENT_ID"),
-                System.Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET"));
+            //  _clientSecretCredential = new ClientSecretCredential(
+            //     System.Environment.GetEnvironmentVariable("AZURE_TENANT_ID"), 
+            //     System.Environment.GetEnvironmentVariable("AZURE_CLIENT_ID"),
+            //     System.Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET"));
 
-            _graphServiceClient = new GraphServiceClient(_clientSecretCredential,
-                // Use the default scope, which will request the scopes
-                // configured on the app registration
-                new[] {"https://graph.microsoft.com/.default"});
+            // _graphServiceClient = new GraphServiceClient(_clientSecretCredential,
+            //     // Use the default scope, which will request the scopes
+            //     // configured on the app registration
+            //     new[] {"https://graph.microsoft.com/.default"});
+
+            var tokenProvider = new CustomTokenProvider(System.Environment.GetEnvironmentVariable("AuthToken"));
+            var authProvider = new BaseBearerTokenAuthenticationProvider(tokenProvider);
+            _graphServiceClient = new GraphServiceClient(authProvider);
         }
+
 
         public async Task GetTodaysCopilotUsageDataAsync()
         {
@@ -187,6 +193,23 @@ namespace groveale.Services
             }
 
         }
+    }
+
+    public class CustomTokenProvider : IAccessTokenProvider
+    {
+        private readonly string _accessToken;
+
+        public CustomTokenProvider(string accessToken)
+        {
+            _accessToken = accessToken;
+        }
+
+        public async Task<string> GetAuthorizationTokenAsync(Uri uri, Dictionary<string, object> additionalAuthenticationContext = null, CancellationToken cancellationToken = default)
+        {
+            return _accessToken;
+        }
+
+        public AllowedHostsValidator AllowedHostsValidator { get; } = new AllowedHostsValidator();
     }
 
 }
