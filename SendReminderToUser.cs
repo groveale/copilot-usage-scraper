@@ -10,12 +10,12 @@ namespace groveale
     public class SendReminderToUser
     {
         private readonly ILogger<SendReminderToUser> _logger;
-        private readonly IGraphService _graphService;
+        private readonly IGraphDelegatedService _graphDelegatedService;
 
-        public SendReminderToUser(ILogger<SendReminderToUser> logger, IGraphService graphService)
+        public SendReminderToUser(ILogger<SendReminderToUser> logger, IGraphDelegatedService graphDelegatedService)
         {
             _logger = logger;
-            _graphService = graphService;
+            _graphDelegatedService = graphDelegatedService;
         }
 
         [Function(nameof(SendReminderToUser))]
@@ -32,11 +32,11 @@ namespace groveale
             if (String.IsNullOrWhiteSpace(queueMessage.chatId))
             {
                 // Create a chat with the user
-                queueMessage.chatId = await _graphService.CreateChatAsync(queueMessage.UserId);
+                queueMessage.chatId = await _graphDelegatedService.CreateChatAsync(queueMessage.UserId);
             }
 
             // Send message
-            await _graphService.SendChatMessageToUserAsync(queueMessage.MessageText, queueMessage.chatId);
+            await _graphDelegatedService.SendChatMessageToUserAsync(queueMessage.MessageText, queueMessage.chatId);
 
         }
     }

@@ -1,5 +1,7 @@
+using groveale;
 using groveale.Services;
 using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -12,9 +14,14 @@ builder.ConfigureFunctionsWebApplication();
 //     .AddApplicationInsightsTelemetryWorkerService()
 //     .ConfigureFunctionsApplicationInsights();
 
+
 builder.Services.AddSingleton<IGraphService, GraphService>();
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<ICopilotUsageSnapshotService, CopilotUsageSnapshotService>();
 builder.Services.AddSingleton<IQueueService, QueueService>();
+
+// For the auth hack
+builder.Services.AddSingleton<ITokenService, TokenService>();
+builder.Services.AddSingleton<IGraphDelegatedService, GraphDelegatedService>();
 
 builder.Build().Run();

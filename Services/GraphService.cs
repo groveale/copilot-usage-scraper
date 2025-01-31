@@ -16,10 +16,6 @@ namespace groveale.Services
         Task<List<M365CopilotUsage>> GetM365CopilotUsageReportAsyncJSON(Microsoft.Extensions.Logging.ILogger _logger);
         Task SetReportAnonSettingsAsync(bool displayConcealedNames);
         Task<AdminReportSettings> GetReportAnonSettingsAsync();
-
-        Task<ChatMessage> SendChatMessageToUserAsync(string message, string chatId);
-
-        Task<string> CreateChatAsync(string userId);
     }
 
     public class GraphService : IGraphService
@@ -32,20 +28,16 @@ namespace groveale.Services
         {
             //_defaultCredential = new DefaultAzureCredential();
 
-            //  _clientSecretCredential = new ClientSecretCredential(
-            //     System.Environment.GetEnvironmentVariable("AZURE_TENANT_ID"), 
-            //     System.Environment.GetEnvironmentVariable("AZURE_CLIENT_ID"),
-            //     System.Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET"));
+             _clientSecretCredential = new ClientSecretCredential(
+                System.Environment.GetEnvironmentVariable("AZURE_TENANT_ID"), 
+                System.Environment.GetEnvironmentVariable("AZURE_CLIENT_ID"),
+                System.Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET"));
 
-            // _graphServiceClient = new GraphServiceClient(_clientSecretCredential,
-            //     // Use the default scope, which will request the scopes
-            //     // configured on the app registration
-            //     new[] {"https://graph.microsoft.com/.default"});
-
-            var tokenProvider = new CustomTokenProvider(System.Environment.GetEnvironmentVariable("AuthToken"));
-            var authProvider = new BaseBearerTokenAuthenticationProvider(tokenProvider);
-            _graphServiceClient = new GraphServiceClient(authProvider);
-        }
+            _graphServiceClient = new GraphServiceClient(_clientSecretCredential,
+                // Use the default scope, which will request the scopes
+                // configured on the app registration
+                new[] {"https://graph.microsoft.com/.default"});
+     }
 
 
         public async Task GetTodaysCopilotUsageDataAsync()
@@ -128,88 +120,6 @@ namespace groveale.Services
             return result;
         }
 
-        public async Task<ChatMessage> SendChatMessageToUserAsync(string message, string chatId)
-        {
-            var requestBody = new ChatMessage
-            {
-                Body = new ItemBody
-                {
-                    Content = message,
-                },
-            };
-
-            return await _graphServiceClient.Chats[chatId].Messages.PostAsync(requestBody);
-        }
-
-        public async Task<string> CreateChatAsync(string userId)
-        {
-            var requestBody = new Chat
-            {
-                ChatType = ChatType.OneOnOne,
-                Topic = "Copilot Reminder Service",
-                Members = new List<ConversationMember>
-                {
-                    new AadUserConversationMember
-                    {
-                        OdataType = "#microsoft.graph.aadUserConversationMember",
-                        Roles = new List<string>
-                        {
-                            "owner",
-                        },
-                        AdditionalData = new Dictionary<string, object>
-                        {
-                            {
-                                "user@odata.bind" , "https://graph.microsoft.com/v1.0/users('8b081ef6-4792-4def-b2c9-c363a1bf41d5')"
-                            },
-                        },
-                    },
-                    new AadUserConversationMember
-                    {
-                        OdataType = "#microsoft.graph.aadUserConversationMember",
-                        Roles = new List<string>
-                        {
-                            "owner",
-                        },
-                        AdditionalData = new Dictionary<string, object>
-                        {
-                            {
-                                "user@odata.bind" , $"https://graph.microsoft.com/v1.0/users('{userId}')"
-                            },
-                        },
-                    },
-                },
-            };
-
-            try 
-            {
-                Chat result = await _graphServiceClient.Chats.PostAsync(requestBody);
-                return result.Id;
-            }
-            catch
-            {
-                //Todo Add logger
-                //_logger.LogInformation("Error creating chat");
-                return null;
-            }
-
-        }
-    }
-
-    public class CustomTokenProvider : IAccessTokenProvider
-    {
-        private readonly string _accessToken;
-
-        public CustomTokenProvider(string accessToken)
-        {
-            _accessToken = accessToken;
-        }
-
-        public async Task<string> GetAuthorizationTokenAsync(Uri uri, Dictionary<string, object> additionalAuthenticationContext = null, CancellationToken cancellationToken = default)
-        {
-            return _accessToken;
-        }
-
-        public AllowedHostsValidator AllowedHostsValidator { get; } = new AllowedHostsValidator();
     }
 
 }
