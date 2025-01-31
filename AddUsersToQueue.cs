@@ -8,14 +8,12 @@ namespace groveale
     public class AddUsersToQueue
     {
         private readonly ILogger _logger;
-        private readonly IGraphService _graphService;
         private readonly ISettingsService _settingsService;
         private readonly ICopilotUsageSnapshotService _storageSnapshotService;
         private readonly IQueueService _queueService;
 
-        public AddUsersToQueue(ILoggerFactory loggerFactory, IGraphService graphService, ISettingsService settingsService, ICopilotUsageSnapshotService storageSnapshotService, IQueueService queueService)
+        public AddUsersToQueue(ILoggerFactory loggerFactory, ISettingsService settingsService, ICopilotUsageSnapshotService storageSnapshotService, IQueueService queueService)
         {
-            _graphService = graphService;
             _settingsService = settingsService;
             _storageSnapshotService = storageSnapshotService;
             _logger = loggerFactory.CreateLogger<AddUsersToQueue>();

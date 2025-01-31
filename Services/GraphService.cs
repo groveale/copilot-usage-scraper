@@ -16,6 +16,8 @@ namespace groveale.Services
         Task<List<M365CopilotUsage>> GetM365CopilotUsageReportAsyncJSON(Microsoft.Extensions.Logging.ILogger _logger);
         Task SetReportAnonSettingsAsync(bool displayConcealedNames);
         Task<AdminReportSettings> GetReportAnonSettingsAsync();
+
+        Task<Dictionary<string, bool>> GetM365CopilotUsersAsync();
     }
 
     public class GraphService : IGraphService
@@ -49,6 +51,51 @@ namespace groveale.Services
             // Process the usage data as needed
             Console.WriteLine(usageData.Length);
         }
+
+        // No longer needed
+        public async Task<List<User>> GetAllUsersAsync()
+        {
+            var users = new List<User>();
+            var result = await _graphServiceClient.Users.GetAsync((requestConfiguration) =>
+            {
+                requestConfiguration.QueryParameters.Select = new string[] { "id", "userPrincipalName" };
+            });
+
+            users.AddRange(result.Value);
+
+            while (result.OdataNextLink != null)
+            {
+                result = await _graphServiceClient.Users.WithUrl(result.OdataNextLink).GetAsync();
+                users.AddRange(result.Value);
+            }
+            return users;
+        }
+
+        public async Task<Dictionary<string, bool>> GetM365CopilotUsersAsync()
+        {
+            var activeUsers = new List<Office365ActiveUserDetail>();
+
+            var activeUsersResponse = await _graphServiceClient.Reports.GetOffice365ActiveUserDetailWithPeriod("D7").GetAsGetOffice365ActiveUserDetailWithPeriodGetResponseAsync();
+
+            activeUsers.AddRange(activeUsersResponse.Value);
+
+            while (activeUsersResponse.OdataNextLink != null)
+            {
+                activeUsersResponse = await _graphServiceClient.Reports.GetOffice365ActiveUserDetailWithPeriod("D7").WithUrl(activeUsersResponse.OdataNextLink).GetAsGetOffice365ActiveUserDetailWithPeriodGetResponseAsync();
+                activeUsers.AddRange(activeUsersResponse.Value);
+            }
+
+            var copilotUsers = new Dictionary<string, bool>();
+            // find all the user that have a copilot license. let's use lynq to filter the users
+            activeUsers.Where(usr => usr.AssignedProducts.Contains("MICROSOFT 365 COPILOT")).ToList().ForEach(usr =>
+            {
+                copilotUsers.Add(usr.UserPrincipalName, true);
+            });
+
+            return copilotUsers;
+        }
+
+
 
         public async Task<List<M365CopilotUsage>> GetM365CopilotUsageReportAsyncJSON(Microsoft.Extensions.Logging.ILogger _logger)
         {

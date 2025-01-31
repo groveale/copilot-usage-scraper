@@ -25,6 +25,7 @@ namespace groveale.Services
         private readonly GraphServiceClient _graphServiceClient;
         private readonly ITokenService _tokenService;
         private readonly ILogger<GraphDelegatedService> _logger;
+        private readonly string _serviceAccountUpn;
 
         public GraphDelegatedService(ITokenService tokenService, ILogger<GraphDelegatedService> logger)
         {
@@ -34,6 +35,7 @@ namespace groveale.Services
             var tokenProvider = new CustomTokenProvider(_tokenService);
             var authProvider = new BaseBearerTokenAuthenticationProvider(tokenProvider);
             _graphServiceClient = new GraphServiceClient(authProvider);
+            _serviceAccountUpn = Environment.GetEnvironmentVariable("SERVICE_ACCOUNT_UPN");
         }
 
         public async Task<ChatMessage> SendChatMessageToUserAsync(string message, string chatId)
@@ -46,12 +48,11 @@ namespace groveale.Services
             return await _graphServiceClient.Chats[chatId].Messages.PostAsync(requestBody);
         }
 
-        public async Task<string> CreateChatAsync(string userId)
+        public async Task<string> CreateChatAsync(string upn)
         {
             var requestBody = new Chat
             {
                 ChatType = ChatType.OneOnOne,
-                Topic = "Copilot Reminder Service",
                 Members = new List<ConversationMember>
                 {
                     new AadUserConversationMember
@@ -60,7 +61,7 @@ namespace groveale.Services
                         Roles = new List<string> { "owner" },
                         AdditionalData = new Dictionary<string, object>
                         {
-                            { "user@odata.bind", "https://graph.microsoft.com/v1.0/users('8b081ef6-4792-4def-b2c9-c363a1bf41d5')" }
+                            { "user@odata.bind", $"https://graph.microsoft.com/v1.0/users('{_serviceAccountUpn}')" }
                         }
                     },
                     new AadUserConversationMember
@@ -69,7 +70,7 @@ namespace groveale.Services
                         Roles = new List<string> { "owner" },
                         AdditionalData = new Dictionary<string, object>
                         {
-                            { "user@odata.bind", $"https://graph.microsoft.com/v1.0/users('{userId}')" }
+                            { "user@odata.bind", $"https://graph.microsoft.com/v1.0/users('{upn}')" }
                         }
                     }
                 }

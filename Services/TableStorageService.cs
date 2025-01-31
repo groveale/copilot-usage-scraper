@@ -46,6 +46,7 @@ namespace groveale.Services
 
 
             // Define the query filter
+            // todo need to also add days since usage (all users will be here)
             string filter = TableClient.CreateQueryFilter(
                 $"(DaysSinceLastNotification gt {reminderInterval} or DaysSinceLastNotification eq null) and (NotificationCount lt {reminderCount} or NotificationCount eq null)"
             );
@@ -65,8 +66,11 @@ namespace groveale.Services
                         LastActivityDate = entity["LastActivityDate"].ToString(),
                         DaysSinceLastActivity = (double)entity["DaysSinceLastActivity"],
                         DaysSinceLastNotification = entity["DaysSinceLastNotification"] != null ? (int)entity["DaysSinceLastNotification"] : 0,
-                        NotificationCount = entity["NotificationCount"] != null ? (int)entity["NotificationCount"] : 0
+                        NotificationCount = entity["NotificationCount"] != null ? (int)entity["NotificationCount"] : 0,
+                        DisplayName = entity["DisplayName"].ToString(),
+                        
                     });
+                    
                 }
             }
             catch (RequestFailedException ex)
@@ -84,7 +88,7 @@ namespace groveale.Services
             int DAUadded = 0;
 
             // Tuple to store the user's last activity date and username
-            var lastActivityDates = new List<(string, string, string)>();
+            var lastActivityDates = new List<(string, string, string, string)>();
 
             var tableClient = _serviceClient.GetTableClient(_userDAUTableName);
             tableClient.CreateIfNotExists();
@@ -101,7 +105,7 @@ namespace groveale.Services
                         // we need to record in another table
                         // Can we set the last activity as epoch when null?
                         var epochTime = new DateTime(1970, 1, 1);
-                        lastActivityDates.Add((epochTime.ToString("yyyy-MM-dd"), userSnap.UserPrincipalName, userSnap.ReportRefreshDate));
+                        lastActivityDates.Add((epochTime.ToString("yyyy-MM-dd"), userSnap.UserPrincipalName, userSnap.ReportRefreshDate, userSnap.DisplayName));
                     }
                     else
                     {
@@ -113,7 +117,7 @@ namespace groveale.Services
                         if (lastActivityDate.AddDays(_daysToCheck) < reportRefreshDate)
                         {
                             // we need to record in another table
-                            lastActivityDates.Add((userSnap.LastActivityDate, userSnap.UserPrincipalName, userSnap.ReportRefreshDate));
+                            lastActivityDates.Add((userSnap.LastActivityDate, userSnap.UserPrincipalName, userSnap.ReportRefreshDate, userSnap.DisplayName));
                         }
                     }
 
@@ -155,15 +159,21 @@ namespace groveale.Services
                 var lastActivityTableClient = _serviceClient.GetTableClient(_userLastUsageTableName);
                 lastActivityTableClient.CreateIfNotExists();
 
-                foreach (var (lastActivityDate, userPrincipalName, reportRefreshDate) in lastActivityDates)
+                var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+                foreach (var (lastActivityDate, userPrincipalName, reportRefreshDate, displayName) in lastActivityDates)
                 {
 
                     // Check if record exists in table for user
-                    var tableEntity = new TableEntity(userPrincipalName, userPrincipalName)
+                    var tableEntity = new TableEntity(userPrincipalName, lastActivityDate)
                     {
                         { "LastActivityDate", lastActivityDate },
                         { "ReportRefreshDate", reportRefreshDate },
-                        { "DaysSinceLastActivity", (DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null) - DateTime.ParseExact(lastActivityDate, "yyyy-MM-dd", null)).TotalDays }
+                        { "DaysSinceLastActivity", (DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null) - DateTime.ParseExact(lastActivityDate, "yyyy-MM-dd", null)).TotalDays },
+                        { "LastNotificationDate", today },
+                        { "DaysSinceLastNotification", null },
+                        { "NotificationCount", null },
+                        { "DisplayName", displayName }
                     };
 
                     try
@@ -174,9 +184,31 @@ namespace groveale.Services
                     catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
                     {
                         // Merge the entity if it already exists
+                        // Get the existing entity
+                        var existingTableEntity = await lastActivityTableClient.GetEntityAsync<TableEntity>(userPrincipalName, lastActivityDate);
+
+                        // Need to up the reminder count
+                        tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"] != null ? (int)existingTableEntity.Value["NotificationCount"] + 1 : 1;
+
+                        // Need to up the days since last notification
+                        tableEntity["DaysSinceLastNotification"] = (DateTime.ParseExact(today, "yyyy-MM-dd", null) - DateTime.ParseExact(existingTableEntity.Value["LastNotificationDate"].ToString(), "yyyy-MM-dd", null)).TotalDays;
+
                         await lastActivityTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
                     }
                 }
+            
+                
+                
+            }
+
+            // Find all records with report refresh date note equal to current and delete
+            // Clear out users who have had activity since we last reminded them
+            string filter = TableClient.CreateQueryFilter($"ReportRefreshDate ne '{userSnapshots[0].ReportRefreshDate}'");
+            var queryResults = tableClient.QueryAsync<TableEntity>(filter);
+
+            await foreach (TableEntity entity in queryResults)
+            {
+                await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
             }
 
             return DAUadded;

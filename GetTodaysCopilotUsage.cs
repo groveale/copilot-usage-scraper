@@ -48,6 +48,9 @@ namespace groverale
             // Get the usage data
             var usageData = await _graphService.GetM365CopilotUsageReportAsyncJSON(_logger);
             _logger.LogInformation($"Usage data: {usageData.Count}");
+
+            var copilotUsers = await _graphService.GetM365CopilotUsersAsync();
+            _logger.LogInformation($"copilot users: {copilotUsers.Count}");
     
             // Set the report settings back to hide names (if hidden)
             if (reportSettings.DisplayConcealedNames.Value)
@@ -56,9 +59,18 @@ namespace groverale
                 await _graphService.SetReportAnonSettingsAsync(true);
             }
 
-            var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(usageData);
+            // Remove snapshot for non-copilot users
+            var copilotUsageData = RemoveNonCopilotUsers(usageData, copilotUsers);
+            _logger.LogInformation($"copilot users usage data: {copilotUsageData.Count}");
+
+            var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(copilotUsageData);
             _logger.LogInformation($"Records added: {recordsAdded}");
  
+        }
+
+        private List<M365CopilotUsage> RemoveNonCopilotUsers(List<M365CopilotUsage> usageData, Dictionary<string, bool> copilotUsers)
+        {
+            return usageData.Where(u => copilotUsers.ContainsKey(u.UserPrincipalName)).ToList();
         }
     }
 }

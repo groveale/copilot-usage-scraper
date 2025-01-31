@@ -29,14 +29,10 @@ namespace groveale
             // Serialize the message to get the user email
             var queueMessage = JsonConvert.DeserializeObject<CopilotQueueMessage>(message.MessageText);
 
-            if (String.IsNullOrWhiteSpace(queueMessage.chatId))
-            {
-                // Create a chat with the user
-                queueMessage.chatId = await _graphDelegatedService.CreateChatAsync(queueMessage.UserId);
-            }
-
+            var chatId = await _graphDelegatedService.CreateChatAsync(queueMessage.UserId);
+            
             // Send message
-            await _graphDelegatedService.SendChatMessageToUserAsync(queueMessage.MessageText, queueMessage.chatId);
+            await _graphDelegatedService.SendChatMessageToUserAsync(queueMessage.MessageText, chatId);
 
         }
     }
