@@ -13,6 +13,7 @@ namespace groveale.Services
         string KeyVaultSecretName { get; }
         bool CDXTenant { get; }
         string RedirectUri { get; }
+        string ServiceAccountUpn { get; }
         
     }
 
@@ -29,6 +30,7 @@ namespace groveale.Services
         public string StorageAccountKey => Environment.GetEnvironmentVariable("StorageAccountKey");
         public bool CDXTenant => Environment.GetEnvironmentVariable("CDXTenant") == "true";
         public string RedirectUri => Environment.GetEnvironmentVariable("RedirectUri");
+        public string ServiceAccountUpn => Environment.GetEnvironmentVariable("SERVICE_ACCOUNT_UPN");
 
     }
 }

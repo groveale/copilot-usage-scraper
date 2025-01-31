@@ -70,7 +70,17 @@ namespace groverale
 
         private List<M365CopilotUsage> RemoveNonCopilotUsers(List<M365CopilotUsage> usageData, Dictionary<string, bool> copilotUsers)
         {
-            return usageData.Where(u => copilotUsers.ContainsKey(u.UserPrincipalName)).ToList();
+            var filteredUsageData = new List<M365CopilotUsage>();
+
+            foreach (var u in usageData)
+            {
+                if (copilotUsers.ContainsKey(u.UserPrincipalName))
+                {
+                    filteredUsageData.Add(u);
+                }
+            }
+
+            return filteredUsageData;
         }
     }
 }

@@ -187,11 +187,22 @@ namespace groveale.Services
                         // Get the existing entity
                         var existingTableEntity = await lastActivityTableClient.GetEntityAsync<TableEntity>(userPrincipalName, lastActivityDate);
 
-                        // Need to up the reminder count
-                        tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"] != null ? (int)existingTableEntity.Value["NotificationCount"] + 1 : 1;
+                        // persit the existing value for LastNotificationDate and NotificationCount
+                        tableEntity["LastNotificationDate"] = existingTableEntity.Value["LastNotificationDate"];
+                        tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"];
 
                         // Need to up the days since last notification
                         tableEntity["DaysSinceLastNotification"] = (DateTime.ParseExact(today, "yyyy-MM-dd", null) - DateTime.ParseExact(existingTableEntity.Value["LastNotificationDate"].ToString(), "yyyy-MM-dd", null)).TotalDays;
+
+                        // check if we need to send a reminder 
+                        if ((double)tableEntity["DaysSinceLastNotification"] >= reminderInterval)
+                        {
+                            // Add to the notification count
+                            tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"] != null ? (int)existingTableEntity.Value["NotificationCount"] + 1 : 1;
+
+                            // Add to the last notification date
+                            tableEntity["LastNotificationDate"] = today;
+                        }
 
                         await lastActivityTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
                     }
@@ -201,14 +212,25 @@ namespace groveale.Services
                 
             }
 
+            var reportRfreshDate = userSnapshots[0].ReportRefreshDate;
+
             // Find all records with report refresh date note equal to current and delete
             // Clear out users who have had activity since we last reminded them
-            string filter = TableClient.CreateQueryFilter($"ReportRefreshDate ne '{userSnapshots[0].ReportRefreshDate}'");
-            var queryResults = tableClient.QueryAsync<TableEntity>(filter);
+            var clearLastActivityTableClient = _serviceClient.GetTableClient(_userLastUsageTableName);
+            clearLastActivityTableClient.CreateIfNotExists();
+            string filter = $"ReportRefreshDate ne '{reportRfreshDate}'";
+            var queryResults = clearLastActivityTableClient.QueryAsync<TableEntity>(filter);
 
-            await foreach (TableEntity entity in queryResults)
+            try {
+                // Query all records with filter
+                await foreach (TableEntity entity in queryResults)
+                {
+                    await clearLastActivityTableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
+                }
+            }
+            catch (RequestFailedException ex)
             {
-                await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
+                Console.WriteLine($"Error deleting records: {ex.Message}");
             }
 
             return DAUadded;

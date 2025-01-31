@@ -38,6 +38,12 @@ namespace groveale
 
             foreach (var user in users)
             {
+                if (user.UPN == _settingsService.ServiceAccountUpn)
+                {
+                    // Skip the service account
+                    continue;
+                }
+
                 await _queueService.AddMessageAsync(user);
             }
 

@@ -75,24 +75,37 @@ namespace groveale.Services
         {
             var activeUsers = new List<Office365ActiveUserDetail>();
 
-            var activeUsersResponse = await _graphServiceClient.Reports.GetOffice365ActiveUserDetailWithPeriod("D7").GetAsGetOffice365ActiveUserDetailWithPeriodGetResponseAsync();
+            var urlString = _graphServiceClient.Reports.GetOffice365ActiveUserDetailWithPeriod("D7").ToGetRequestInformation().URI.OriginalString;
+            urlString += "?$format=application/json";//append the query parameter
 
-            activeUsers.AddRange(activeUsersResponse.Value);
-
-            while (activeUsersResponse.OdataNextLink != null)
+            try
             {
-                activeUsersResponse = await _graphServiceClient.Reports.GetOffice365ActiveUserDetailWithPeriod("D7").WithUrl(activeUsersResponse.OdataNextLink).GetAsGetOffice365ActiveUserDetailWithPeriodGetResponseAsync();
+                var activeUsersResponse = await _graphServiceClient.Reports.GetOffice365ActiveUserDetailWithPeriod("D7").WithUrl(urlString).GetAsGetOffice365ActiveUserDetailWithPeriodGetResponseAsync();
+
                 activeUsers.AddRange(activeUsersResponse.Value);
+
+                while (activeUsersResponse.OdataNextLink != null)
+                {
+                    activeUsersResponse = await _graphServiceClient.Reports.GetOffice365ActiveUserDetailWithPeriod("D7").WithUrl(activeUsersResponse.OdataNextLink).GetAsGetOffice365ActiveUserDetailWithPeriodGetResponseAsync();
+                    activeUsers.AddRange(activeUsersResponse.Value);
+                }
+
+                var copilotUsers = new Dictionary<string, bool>();
+                // find all the user that have a copilot license. let's use lynq to filter the users
+                activeUsers.Where(usr => usr.AssignedProducts.Contains("MICROSOFT 365 COPILOT")).ToList().ForEach(usr =>
+                {
+                    copilotUsers.Add(usr.UserPrincipalName, true);
+                });
+
+                return copilotUsers;
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting copilot users: {ex.Message}");
             }
 
-            var copilotUsers = new Dictionary<string, bool>();
-            // find all the user that have a copilot license. let's use lynq to filter the users
-            activeUsers.Where(usr => usr.AssignedProducts.Contains("MICROSOFT 365 COPILOT")).ToList().ForEach(usr =>
-            {
-                copilotUsers.Add(usr.UserPrincipalName, true);
-            });
-
-            return copilotUsers;
+            return null;
         }
 
 

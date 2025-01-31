@@ -32,7 +32,7 @@ namespace groveale.Services
 
             var messageObject = new CopilotQueueMessage{
                 UserId = user.UPN,
-                MessageText = "Please ensure you use Copilot today",
+                MessageText = CraftReminderMessage(user)
             };
 
             string message = JsonConvert.SerializeObject(messageObject);

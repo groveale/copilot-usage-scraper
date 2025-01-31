@@ -23,6 +23,7 @@ namespace groveale
         {
             _logger.LogInformation($"C# Queue trigger function processed: {message.MessageText}");
 
+
             // Send Teams message to user
             _logger.LogInformation("Sending message to user...");
 
@@ -30,6 +31,11 @@ namespace groveale
             var queueMessage = JsonConvert.DeserializeObject<CopilotQueueMessage>(message.MessageText);
 
             var chatId = await _graphDelegatedService.CreateChatAsync(queueMessage.UserId);
+
+            if (string.IsNullOrEmpty(chatId))
+            {
+                _logger.LogError("Error creating chat with user.");
+            }
             
             // Send message
             await _graphDelegatedService.SendChatMessageToUserAsync(queueMessage.MessageText, chatId);
