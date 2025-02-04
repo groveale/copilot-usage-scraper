@@ -63,8 +63,17 @@ namespace groverale
             var copilotUsageData = RemoveNonCopilotUsers(usageData, copilotUsers);
             _logger.LogInformation($"copilot users usage data: {copilotUsageData.Count}");
 
-            var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(copilotUsageData);
-            _logger.LogInformation($"Records added: {recordsAdded}");
+            try
+            {
+                var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(copilotUsageData);
+                _logger.LogInformation($"Records added: {recordsAdded}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing usage data. {Message}", ex.Message);
+            }
+
+            
  
         }
 

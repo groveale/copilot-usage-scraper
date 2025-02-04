@@ -60,7 +60,9 @@ namespace groveale
 
         private bool IsDevelopment()
         {
-            return string.Equals(_environment, "Development", StringComparison.OrdinalIgnoreCase);
+            // todo: remove this
+            return true;
+            //return string.Equals(_environment, "Development", StringComparison.OrdinalIgnoreCase);
         }
 
         public async Task<string> GetAccessTokenAsync()

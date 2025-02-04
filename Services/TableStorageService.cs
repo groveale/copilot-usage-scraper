@@ -48,7 +48,7 @@ namespace groveale.Services
             // Define the query filter
             // todo need to also add days since usage (all users will be here)
             string filter = TableClient.CreateQueryFilter(
-                $"(DaysSinceLastNotification gt {reminderInterval} or DaysSinceLastNotification eq null) and (NotificationCount lt {reminderCount} or NotificationCount eq null)"
+                $"(DaysSinceLastNotification gt {reminderInterval} or DaysSinceLastNotification eq 0) and (NotificationCount lt {reminderCount} or NotificationCount eq 0)"
             );
 
             var records = new List<CopilotReminderItem>();
@@ -65,8 +65,8 @@ namespace groveale.Services
                         UPN = entity.PartitionKey,
                         LastActivityDate = entity["LastActivityDate"].ToString(),
                         DaysSinceLastActivity = (double)entity["DaysSinceLastActivity"],
-                        DaysSinceLastNotification = entity["DaysSinceLastNotification"] != null ? (int)entity["DaysSinceLastNotification"] : 0,
-                        NotificationCount = entity["NotificationCount"] != null ? (int)entity["NotificationCount"] : 0,
+                        DaysSinceLastNotification = (int)(entity["DaysSinceLastNotification"] != null ? entity["DaysSinceLastNotification"] : 0),
+                        NotificationCount = (int)(entity["NotificationCount"] != null ? entity["NotificationCount"] : 0),
                         DisplayName = entity["DisplayName"].ToString(),
                         
                     });
@@ -171,8 +171,8 @@ namespace groveale.Services
                         { "ReportRefreshDate", reportRefreshDate },
                         { "DaysSinceLastActivity", (DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null) - DateTime.ParseExact(lastActivityDate, "yyyy-MM-dd", null)).TotalDays },
                         { "LastNotificationDate", today },
-                        { "DaysSinceLastNotification", null },
-                        { "NotificationCount", null },
+                        { "DaysSinceLastNotification", 0 },
+                        { "NotificationCount", 0 },
                         { "DisplayName", displayName }
                     };
 

@@ -32,22 +32,30 @@ namespace groveale
 
             // Add users to the queue
             _logger.LogInformation("Getting users to remind...");
-            var users = await _storageSnapshotService.GetUsersForQueue();
 
-            _logger.LogInformation($"Found {users.Count} users...");
-
-            foreach (var user in users)
+            try
             {
-                if (user.UPN == _settingsService.ServiceAccountUpn)
+                var users = await _storageSnapshotService.GetUsersForQueue();
+
+                _logger.LogInformation($"Found {users.Count} users...");
+
+                foreach (var user in users)
                 {
-                    // Skip the service account
-                    continue;
+                    if (user.UPN == _settingsService.ServiceAccountUpn)
+                    {
+                        // Skip the service account
+                        continue;
+                    }
+
+                    await _queueService.AddMessageAsync(user);
                 }
 
-                await _queueService.AddMessageAsync(user);
+                _logger.LogInformation("Users added to the queue.");
             }
-
-            _logger.LogInformation("Users added to the queue.");
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding users to the queue. {Message}", ex.Message);
+            }    
 
         }
     }
