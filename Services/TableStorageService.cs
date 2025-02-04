@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Azure;
 using Azure.Data.Tables;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace groveale.Services 
@@ -15,6 +16,7 @@ namespace groveale.Services
     public class CopilotUsageSnapshotService : ICopilotUsageSnapshotService
     {
         private readonly TableServiceClient _serviceClient;
+        private readonly ILogger<CopilotUsageSnapshotService> _logger;
         private readonly bool CDXTenant = System.Environment.GetEnvironmentVariable("CDXTenant") == "true";
         private readonly string _userDAUTableName = "CopilotUsageDailySnapshots";
         private readonly string _userLastUsageTableName = "UsersLastUsageTracker";
@@ -25,8 +27,10 @@ namespace groveale.Services
 
         private readonly int reminderCount = int.TryParse(System.Environment.GetEnvironmentVariable("ReminderCount"), out var date) ? date : 0;
         
-        public CopilotUsageSnapshotService()
+        public CopilotUsageSnapshotService(ILogger<CopilotUsageSnapshotService> logger)
         {
+            _logger = logger;
+
             var storageUri = System.Environment.GetEnvironmentVariable("StorageAccountUri");
             var accountName = System.Environment.GetEnvironmentVariable("StorageAccountName");
             var storageAccountKey = System.Environment.GetEnvironmentVariable("StorageAccountKey");
@@ -43,13 +47,16 @@ namespace groveale.Services
             var tableClient = _serviceClient.GetTableClient(_userLastUsageTableName);
             tableClient.CreateIfNotExists();
 
+            //
 
 
             // Define the query filter
             // todo need to also add days since usage (all users will be here)
             string filter = TableClient.CreateQueryFilter(
-                $"(DaysSinceLastNotification gt {reminderInterval} or DaysSinceLastNotification eq 0) and (NotificationCount lt {reminderCount} or NotificationCount eq 0)"
+                $"(DaysSinceLastNotification gt {reminderInterval}) and (NotificationCount lt {reminderCount} or NotificationCount eq 0)"
             );
+
+            _logger.LogInformation($"Filter: {filter}");
 
             var records = new List<CopilotReminderItem>();
         
@@ -58,16 +65,18 @@ namespace groveale.Services
                 // Query all records with filter
                 AsyncPageable<TableEntity> queryResults = tableClient.QueryAsync<TableEntity>(filter);
 
+                
+
                 await foreach (TableEntity entity in queryResults)
                 {
                     records.Add(new CopilotReminderItem
                     {
                         UPN = entity.PartitionKey,
-                        LastActivityDate = entity["LastActivityDate"].ToString(),
-                        DaysSinceLastActivity = (double)entity["DaysSinceLastActivity"],
-                        DaysSinceLastNotification = (int)(entity["DaysSinceLastNotification"] != null ? entity["DaysSinceLastNotification"] : 0),
-                        NotificationCount = (int)(entity["NotificationCount"] != null ? entity["NotificationCount"] : 0),
-                        DisplayName = entity["DisplayName"].ToString(),
+                        DisplayName = entity.GetString("DisplayName"),
+                        LastActivityDate = entity.GetString("LastActivityDate"),
+                        DaysSinceLastActivity = entity.GetDouble("DaysSinceLastActivity") ?? 0,
+                        DaysSinceLastNotification = entity.GetDouble("DaysSinceLastNotification") ?? 0,
+                        NotificationCount = entity.GetInt32("NotificationCount") ?? 0
                         
                     });
                     
@@ -171,7 +180,7 @@ namespace groveale.Services
                         { "ReportRefreshDate", reportRefreshDate },
                         { "DaysSinceLastActivity", (DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null) - DateTime.ParseExact(lastActivityDate, "yyyy-MM-dd", null)).TotalDays },
                         { "LastNotificationDate", today },
-                        { "DaysSinceLastNotification", 0 },
+                        { "DaysSinceLastNotification", (double)999 },
                         { "NotificationCount", 0 },
                         { "DisplayName", displayName }
                     };
@@ -189,16 +198,26 @@ namespace groveale.Services
 
                         // persit the existing value for LastNotificationDate and NotificationCount
                         tableEntity["LastNotificationDate"] = existingTableEntity.Value["LastNotificationDate"];
-                        tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"];
+                       
+                        if (existingTableEntity.Value.GetInt32("NotificationCount") != 0)
+                        {
+                            tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"];
+                        }
+                        else
+                        {
+                            tableEntity["NotificationCount"] = 1;
+                        }
 
                         // Need to up the days since last notification
                         tableEntity["DaysSinceLastNotification"] = (DateTime.ParseExact(today, "yyyy-MM-dd", null) - DateTime.ParseExact(existingTableEntity.Value["LastNotificationDate"].ToString(), "yyyy-MM-dd", null)).TotalDays;
 
-                        // check if we need to send a reminder 
-                        if ((double)tableEntity["DaysSinceLastNotification"] >= reminderInterval)
+                        // check if we need to send a reminder
+                        var daysSinceLastNotification = tableEntity.GetDouble("DaysSinceLastNotification") ?? 0;
+
+                        if (daysSinceLastNotification >= reminderInterval)
                         {
                             // Add to the notification count
-                            tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"] != null ? (int)existingTableEntity.Value["NotificationCount"] + 1 : 1;
+                            tableEntity["NotificationCount"] = (existingTableEntity.Value.GetInt32("NotificationCount") ?? 0) + 1;
 
                             // Add to the last notification date
                             tableEntity["LastNotificationDate"] = today;
@@ -206,10 +225,7 @@ namespace groveale.Services
 
                         await lastActivityTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
                     }
-                }
-            
-                
-                
+                }    
             }
 
             var reportRfreshDate = userSnapshots[0].ReportRefreshDate;
