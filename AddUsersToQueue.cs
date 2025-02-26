@@ -33,6 +33,8 @@ namespace groveale
             // Add users to the queue
             _logger.LogInformation("Getting users to remind...");
 
+            return;
+
             try
             {
                 var users = await _storageSnapshotService.GetUsersForQueue();

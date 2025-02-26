@@ -23,6 +23,8 @@ namespace groveale
         {
             _logger.LogInformation($"C# Queue trigger function processed: {message.MessageText}");
 
+            return;
+
 
             // Send Teams message to user
             _logger.LogInformation("Sending message to user...");

@@ -11,4 +11,5 @@ public class UserActivity
     public bool DailyPowerPointActivity { get; set; }
     public bool DailyOneNoteActivity { get; set; }
     public bool DailyLoopActivity { get; set; }
+    public bool DailyCopilotAllUpActivity { get; set; }
 }
