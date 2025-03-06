@@ -6,7 +6,7 @@ public class MonthlyUsage
     public DateTime StartDate { get; set; }
     public string UPN { get; set; }
     public string DisplayName { get; set; }
-    public int CopilotAllUpActivityCount { get; set; }
+    public int DailyAllActivityCount { get; set; }
     public int DailyTeamsActivityCount { get; set; }
     public int DailyCopilotChatActivityCount { get; set; }
     public int DailyOutlookActivityCount { get; set; }

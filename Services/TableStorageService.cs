@@ -21,7 +21,13 @@ namespace groveale.Services
 
         Task<string?> GetStartDate(string timeFrame);
 
+        Task<List<string>> GetUsersWhoHaveCompletedActivity(List<string> apps, string count, string timeFrame, string startDate);
         Task<List<string>> GetUsersWhoHaveCompletedActivity(string app, string count, string timeFrame, string startDate);
+
+        // For Seeding
+        Task SeedDailyActivitiesAsync(List<UserActivity> userActivitiesSeed);
+        Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed);
+        Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed);
     }
 
     public class CopilotUsageSnapshotService : ICopilotUsageSnapshotService
@@ -214,13 +220,13 @@ namespace groveale.Services
                 await UpdateUserWeeklySnapshots(userSnap);
                 await UpdateUserMonthlySnapshots(userSnap);
 
-                
+
             }
 
             // Update the timeFrame table
-            await UpdateReportRefreshDate(reportRefreshDateString, "Daily");
-            await UpdateReportRefreshDate(reportRefreshDateString, "Weekly");
-            await UpdateReportRefreshDate(reportRefreshDateString, "Monthly");
+            await UpdateReportRefreshDate(reportRefreshDateString, "daily");
+            await UpdateReportRefreshDate(reportRefreshDateString, "weekly");
+            await UpdateReportRefreshDate(reportRefreshDateString, "monthly");
 
             // For notifications - now handled elsewhere
             return DAUadded;
@@ -316,11 +322,12 @@ namespace groveale.Services
         private async Task UpdateReportRefreshDate(string reportRefreshDate, string timeFrame)
         {
             // switch on timeFrame to determine startdate
+            timeFrame = timeFrame.ToLowerInvariant();
             var startDate = timeFrame switch
             {
-                "Daily" => reportRefreshDate,
-                "Weekly" => GetWeekStartDate(DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null)),
-                "Monthly" => GetMonthStartDate(DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null)),
+                "daily" => reportRefreshDate,
+                "weekly" => GetWeekStartDate(DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null)),
+                "monthly" => GetMonthStartDate(DateTime.ParseExact(reportRefreshDate, "yyyy-MM-dd", null)),
                 _ => throw new ArgumentException("Invalid timeFrame")
             };
 
@@ -624,19 +631,79 @@ namespace groveale.Services
             };
 
             // Define the query filter for weekly, monthly 
-            string filter = TableClient.CreateQueryFilter($"PartitionKey eq '{date}' and Daily{app}Activity ge {count}");
+            string filter = $"PartitionKey eq '{date}' and Daily{app}Activity ge {count}";
 
             // Define the query filter for daily
             if (timeFrame == "daily")
             {
-                filter = TableClient.CreateQueryFilter($"PartitionKey eq '{date}' and Daily{app}Activity eq true");
+                filter = $"PartitionKey eq '{date}' and Daily{app}Activity eq true";
             }
 
             // Define the query filter for alltime
             if (timeFrame == "alltime")
             {
-                filter = TableClient.CreateQueryFilter($"Daily{app}ActivityCount ge {count}");
+                filter = $"RowKey eq '{app}' and DailyAllTimeActivityCount ge {count}";
             }
+
+            // log the filter
+            _logger.LogInformation($"Filter for {timeFrame}: {filter}");
+
+            // Get the users
+            var users = new List<string>();
+            try
+            {
+                // Query all records with filter
+                AsyncPageable<TableEntity> queryResults = tableClient.QueryAsync<TableEntity>(filter);
+
+                await foreach (TableEntity entity in queryResults)
+                {
+                    users.Add(entity.RowKey);
+                }
+            }
+            catch (RequestFailedException ex)
+            {
+                _logger.LogError($"Error retrieving records: {ex.Message}");
+                throw;
+            }
+
+            // return some users for testing
+            return users;
+        }
+        public async Task<List<string>> GetUsersWhoHaveCompletedActivity(List<string> apps, string count, string timeFrame, string date)
+        {
+            // switch statement to get the correct table on timeFrame
+            var tableClient = timeFrame.ToLowerInvariant() switch
+            {
+                "daily" => _userDAUTableClient,
+                "weekly" => _userWeeklyTableClient,
+                "monthly" => _userMonthlyTableClient,
+                "alltime" => _userAllTimeTableClient,
+                _ => throw new ArgumentException("Invalid timeFrame")
+            };
+
+            // For monthly (and other timeframes except daily and alltime)
+            string appsFilterString = string.Join(" and ", apps.Select(app => $"Daily{app}Activity ge {count}"));
+            string filter = $"PartitionKey eq '{date}' and {appsFilterString}";
+
+            // Define the query filter for daily
+            if (timeFrame == "daily")
+            {
+                // replace all ge {count} with eq true
+                appsFilterString = appsFilterString.Replace($"ge {count}", $"eq true");
+
+                filter = $"PartitionKey eq '{date}' and {appsFilterString}";
+            }
+
+            // Define the query filter for alltime
+            if (timeFrame == "alltime")
+            {
+                // All time is different as we need a row for each app
+                appsFilterString = string.Join(" or ", apps.Select(app => $"RowKey eq '{app}' and DailyAllTimeActivityCount ge {count}"));
+                filter = appsFilterString;
+            }
+
+            // log the filter
+            _logger.LogInformation($"Filter for {timeFrame}: {filter}");
 
             // Get the users
             var users = new List<string>();
@@ -658,7 +725,6 @@ namespace groveale.Services
             // return some users for testing
             return users;
         }
-
         static string GetWeekStartDate(DateTime date)
         {
             // Get the Monday of the current week
@@ -678,7 +744,7 @@ namespace groveale.Services
         public async Task<string?> GetStartDate(string timeFrame)
         {
             // Get the report refresh date for the timeFrame
-            try 
+            try
             {
                 var existingTableEntity = await _reportRefreshDateTableClient.GetEntityAsync<TableEntity>("ReportRefreshDate", timeFrame);
                 return existingTableEntity.Value["StartDate"].ToString();
@@ -689,6 +755,51 @@ namespace groveale.Services
                 return null;
             }
         }
-            
+
+        public async Task SeedDailyActivitiesAsync(List<UserActivity> userActivitiesSeed)
+        {
+            // Get daily table
+            foreach (var userEntity in userActivitiesSeed)
+            {
+                // Add user record
+                var tableEntity = new TableEntity(userEntity.ReportDate.ToString("yyyy-MM-dd"), userEntity.UPN)
+                {
+                    { "ReportDate", userEntity.ReportDate },
+                    { "DisplayName", userEntity.DisplayName },
+                    { "DailyTeamsActivity", userEntity.DailyTeamsActivity },
+                    { "DailyOutlookActivity", userEntity.DailyOutlookActivity },
+                    { "DailyWordActivity", userEntity.DailyWordActivity },
+                    { "DailyExcelActivity", userEntity.DailyExcelActivity },
+                    { "DailyPowerPointActivity", userEntity.DailyPowerPointActivity },
+                    { "DailyOneNoteActivity", userEntity.DailyOneNoteActivity },
+                    { "DailyLoopActivity", userEntity.DailyLoopActivity },
+                    { "DailyCopilotChatActivity", userEntity.DailyCopilotChatActivity },
+                    { "DailyAllActivity", userEntity.DailyCopilotAllUpActivity }
+                };
+
+                try
+                {
+                    // Try to add the entity if it doesn't exist
+                    await _userDAUTableClient.AddEntityAsync(tableEntity);
+                    _logger.LogInformation($"Added daily seed entity for {userEntity.UPN}");
+                }
+                catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
+                {
+                    // Merge the entity if it already exists
+                    await _userDAUTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                }
+            }
+
+        }
+
+        public Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

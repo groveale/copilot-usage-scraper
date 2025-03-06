@@ -5,6 +5,7 @@ public class WeeklyUsage
     public string UPN { get; set; }
     public string DisplayName { get; set; }
     public int DailyTeamsActivityCount { get; set; }
+    public int DailyAllActivityCount { get; set; }
     public int DailyCopilotChatActivityCount { get; set; }
     public int DailyOutlookActivityCount { get; set; }
     public int DailyWordActivityCount { get; set; }

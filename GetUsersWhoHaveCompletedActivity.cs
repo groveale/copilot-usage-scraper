@@ -26,7 +26,7 @@ namespace groveale
             _logger.LogInformation("C# HTTP trigger function processed a request.");
 
             // Get params, app, count, timeFrame, and startdate (optional)
-            string app = req.Query["app"];
+
             string count = req.Query["count"];
             string timeFrame = req.Query["timeFrame"];
             string startDate = req.Query["startDate"];
@@ -34,20 +34,33 @@ namespace groveale
             // also check in the body
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
-            app = app ?? data?.app;
             count = count ?? data?.count;
             timeFrame = timeFrame ?? data?.timeFrame;
             startDate = startDate ?? data?.startDate;
-            
+
+            // Handle app parameter as an array or a comma-separated string
+            List<string> appList;
+            if (data?.apps is Newtonsoft.Json.Linq.JArray)
+            {
+                appList = data.apps.ToObject<List<string>>();
+            }
+            else
+            {
+                string apps = req.Query["apps"];
+                appList = apps?.Split(',').Select(a => a.Trim()).ToList();
+            }
+
 
             // Validate params
-            if (string.IsNullOrEmpty(app) || string.IsNullOrEmpty(count) || string.IsNullOrEmpty(timeFrame))
+            if (appList == null || !appList.Any() || string.IsNullOrEmpty(count) || string.IsNullOrEmpty(timeFrame))
             {
                 return new BadRequestObjectResult("Please pass a app, count, and timeFrame on the query string or body");
             }
 
+            timeFrame = timeFrame.ToLower();
+
             // Further validation
-            if (timeFrame != "allTime" && string.IsNullOrEmpty(startDate))
+            if (timeFrame != "alltime" && string.IsNullOrEmpty(startDate))
             {
                 return new BadRequestObjectResult("Please pass a app, count, timeFrame, and startDate on the query string or body");
             }
@@ -55,7 +68,7 @@ namespace groveale
 
             // Get current start date form time frame
             var startDateForTimeFrame = await _storageSnapshotService.GetStartDate(timeFrame);
-            if (startDateForTimeFrame == null)
+            if (startDateForTimeFrame == null && timeFrame != "alltime")
             {
                 return new BadRequestObjectResult("No date yet - wait until tomorrow");
             }
@@ -65,11 +78,40 @@ namespace groveale
             var startDateStatus = "Active";
 
             // if startDateForTimeFrame == startDate from input then we are good
-            if (startDateForTimeFrame == startDate)
+            if (startDateForTimeFrame == startDate || timeFrame == "alltime")
             {
-                // Get users who have completed the activity
-                var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivity(app, count, timeFrame, startDate);
-                usersThatHaveAchieved = users;
+                try
+                {
+                    // Get users who have completed the activity
+                    var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivity(appList, count, timeFrame, startDate);
+                    //var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivity(appList[0], count, timeFrame, startDate);
+
+                    if (timeFrame == "alltime")
+                    {
+                        // need to check we have the a user for every app in the list
+                        usersThatHaveAchieved = users
+                            .GroupBy(user => user)
+                            .Select(group => new
+                            {
+                                Username = group.Key,
+                                AppCount = group.Count()
+                            })
+                            .Where(user => user.AppCount >= appList.Count)
+                            .Select(user => user.Username)
+                            .ToList();
+                    }
+                    else
+                    {
+                        usersThatHaveAchieved = users;
+                    }
+
+
+                }
+                catch (Exception ex)
+                {
+                    return new BadRequestObjectResult(ex.Message);
+                }
+
             }
             else
             {
@@ -86,7 +128,7 @@ namespace groveale
                 {
                     startDateStatus = "Future";
                 }
-                
+
             }
 
             return new OkObjectResult(new { Users = usersThatHaveAchieved, StartDateStatus = startDateStatus });

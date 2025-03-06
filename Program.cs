@@ -19,6 +19,7 @@ builder.Services.AddSingleton<IGraphService, GraphService>();
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<ICopilotUsageSnapshotService, CopilotUsageSnapshotService>();
 builder.Services.AddSingleton<IQueueService, QueueService>();
+builder.Services.AddSingleton<IUserActivitySeeder, UserActivitySeeder>();
 
 // For the auth hack
 builder.Services.AddSingleton<ITokenService, TokenService>();
