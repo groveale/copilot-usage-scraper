@@ -792,14 +792,73 @@ namespace groveale.Services
 
         }
 
-        public Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed)
+        public async Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed)
         {
-            throw new NotImplementedException();
+            foreach (var userEntity in userActivitiesSeed)
+            {
+                // Add user record
+                var tableEntity = new TableEntity(userEntity.StartDate.ToString("yyyy-MM-dd"), userEntity.UPN)
+                {
+                    { "StartDate", userEntity.StartDate },
+                    { "DisplayName", userEntity.DisplayName },
+                    { "DailyTeamsActivityCount", userEntity.DailyTeamsActivityCount },
+                    { "DailyOutlookActivityCount", userEntity.DailyOutlookActivityCount },
+                    { "DailyWordActivityCount", userEntity.DailyWordActivityCount },
+                    { "DailyExcelActivityCount", userEntity.DailyExcelActivityCount },
+                    { "DailyPowerPointActivityCount", userEntity.DailyPowerPointActivityCount },
+                    { "DailyOneNoteActivityCount", userEntity.DailyOneNoteActivityCount },
+                    { "DailyLoopActivityCount", userEntity.DailyLoopActivityCount },
+                    { "DailyCopilotChatActivityCount", userEntity.DailyCopilotChatActivityCount },
+                    { "DailyAllActivityCount", userEntity.DailyAllActivityCount }
+                };
+
+                try
+                {
+                    // Try to add the entity if it doesn't exist
+                    await _userWeeklyTableClient.AddEntityAsync(tableEntity);
+                    _logger.LogInformation($"Added weekly seed entity for {userEntity.UPN}");
+                }
+                catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
+                {
+                    // Merge the entity if it already exists
+                    await _userWeeklyTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                }
+            }
         }
 
-        public Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed)
+        public async Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed)
         {
-            throw new NotImplementedException();
+            // Get daily table
+            foreach (var userEntity in userActivitiesSeed)
+            {
+                // Add user record
+                var tableEntity = new TableEntity(userEntity.StartDate.ToString("yyyy-MM-dd"), userEntity.UPN)
+                {
+                    { "StartDate", userEntity.StartDate },
+                    { "DisplayName", userEntity.DisplayName },
+                    { "DailyTeamsActivityCount", userEntity.DailyTeamsActivityCount },
+                    { "DailyOutlookActivityCount", userEntity.DailyOutlookActivityCount },
+                    { "DailyWordActivityCount", userEntity.DailyWordActivityCount },
+                    { "DailyExcelActivityCount", userEntity.DailyExcelActivityCount },
+                    { "DailyPowerPointActivityCount", userEntity.DailyPowerPointActivityCount },
+                    { "DailyOneNoteActivityCount", userEntity.DailyOneNoteActivityCount },
+                    { "DailyLoopActivityCount", userEntity.DailyLoopActivityCount },
+                    { "DailyCopilotChatActivityCount", userEntity.DailyCopilotChatActivityCount },
+                    { "DailyAllActivityCount", userEntity.DailyAllActivityCount }
+                };
+
+                try
+                {
+                    // Try to add the entity if it doesn't exist
+                    await _userMonthlyTableClient.AddEntityAsync(tableEntity);
+                    _logger.LogInformation($"Added monthly seed entity for {userEntity.UPN}");
+                }
+                catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
+                {
+                    // Merge the entity if it already exists
+                    await _userMonthlyTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                }
+            }
         }
     }
 }

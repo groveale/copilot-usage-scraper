@@ -30,6 +30,7 @@ namespace groveale
             string count = req.Query["count"];
             string timeFrame = req.Query["timeFrame"];
             string startDate = req.Query["startDate"];
+            string demo = req.Query["demo"];
 
             // also check in the body
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
@@ -37,6 +38,8 @@ namespace groveale
             count = count ?? data?.count;
             timeFrame = timeFrame ?? data?.timeFrame;
             startDate = startDate ?? data?.startDate;
+            demo = demo ?? data?.demo;
+            
 
             // Handle app parameter as an array or a comma-separated string
             List<string> appList;
@@ -70,7 +73,7 @@ namespace groveale
             var startDateForTimeFrame = await _storageSnapshotService.GetStartDate(timeFrame);
             if (startDateForTimeFrame == null && timeFrame != "alltime")
             {
-                return new BadRequestObjectResult("No date yet - wait until tomorrow");
+                return new BadRequestObjectResult("No data yet - wait until tomorrow");
             }
 
             // define an object to return
@@ -78,7 +81,7 @@ namespace groveale
             var startDateStatus = "Active";
 
             // if startDateForTimeFrame == startDate from input then we are good
-            if (startDateForTimeFrame == startDate || timeFrame == "alltime")
+            if (startDateForTimeFrame == startDate || timeFrame == "alltime" || demo == "true")
             {
                 try
                 {
@@ -104,7 +107,6 @@ namespace groveale
                     {
                         usersThatHaveAchieved = users;
                     }
-
 
                 }
                 catch (Exception ex)
