@@ -157,7 +157,8 @@ namespace groveale.Services
                 ($"KaiC@{tenantId}.OnMicrosoft.com", "Kai Carter"),
                 ($"LisaT@{tenantId}.OnMicrosoft.com", "Lisa Taylor"),
                 ($"MarioR@{tenantId}.OnMicrosoft.com", "Mario Rogers"),
-                ($"MonicaT@{tenantId}.OnMicrosoft.com", "Monica Thompson")
+                ($"MonicaT@{tenantId}.OnMicrosoft.com", "Monica Thompson"),
+                ($"admin@{tenantId}.onmicrosoft.com", "MOD Administrator")
             };
     }
 }

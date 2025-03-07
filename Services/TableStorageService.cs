@@ -682,14 +682,14 @@ namespace groveale.Services
             };
 
             // For monthly (and other timeframes except daily and alltime)
-            string appsFilterString = string.Join(" and ", apps.Select(app => $"Daily{app}Activity ge {count}"));
+            string appsFilterString = string.Join(" and ", apps.Select(app => $"Daily{app}ActivityCount ge {count}"));
             string filter = $"PartitionKey eq '{date}' and {appsFilterString}";
 
             // Define the query filter for daily
             if (timeFrame == "daily")
             {
                 // replace all ge {count} with eq true
-                appsFilterString = appsFilterString.Replace($"ge {count}", $"eq true");
+                appsFilterString = appsFilterString.Replace($"Count ge {count}", $" eq true");
 
                 filter = $"PartitionKey eq '{date}' and {appsFilterString}";
             }
