@@ -24,10 +24,16 @@ namespace groveale.Services
         Task<List<string>> GetUsersWhoHaveCompletedActivity(List<string> apps, string count, string timeFrame, string startDate);
         Task<List<string>> GetUsersWhoHaveCompletedActivity(string app, string count, string timeFrame, string startDate);
 
+
+        Task<List<InactiveUser>> GetInactiveUsers(int days);
+        Task<List<string>> GetUsersWithStreak(List<string> apps, int count);
+
         // For Seeding
         Task SeedDailyActivitiesAsync(List<UserActivity> userActivitiesSeed);
         Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed);
         Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed);
+
+
     }
 
     public class CopilotUsageSnapshotService : ICopilotUsageSnapshotService
@@ -229,7 +235,7 @@ namespace groveale.Services
             await UpdateReportRefreshDate(reportRefreshDateString, "monthly");
 
             // For notifications - now handled elsewhere
-            return DAUadded;
+            //return DAUadded;
 
             // Do we have any users to record in the last activity table?
             if (lastActivityDates.Count > 0)
@@ -246,9 +252,9 @@ namespace groveale.Services
                         { "LastActivityDate", lastActivityDate },
                         { "ReportRefreshDate", reportRefreshDateItem },
                         { "DaysSinceLastActivity", (DateTime.ParseExact(reportRefreshDateItem, "yyyy-MM-dd", null) - DateTime.ParseExact(lastActivityDate, "yyyy-MM-dd", null)).TotalDays },
-                        { "LastNotificationDate", today },
-                        { "DaysSinceLastNotification", (double)999 },
-                        { "NotificationCount", 0 },
+                        // { "LastNotificationDate", today },
+                        // { "DaysSinceLastNotification", (double)999 },
+                        // { "NotificationCount", 0 },
                         { "DisplayName", displayName }
                     };
 
@@ -263,32 +269,32 @@ namespace groveale.Services
                         // Get the existing entity
                         var existingTableEntity = await _userLastUsageTableClient.GetEntityAsync<TableEntity>(userPrincipalName, lastActivityDate);
 
-                        // persit the existing value for LastNotificationDate and NotificationCount
-                        tableEntity["LastNotificationDate"] = existingTableEntity.Value["LastNotificationDate"];
+                        // // persit the existing value for LastNotificationDate and NotificationCount
+                        // tableEntity["LastNotificationDate"] = existingTableEntity.Value["LastNotificationDate"];
 
-                        if (existingTableEntity.Value.GetInt32("NotificationCount") != 0)
-                        {
-                            tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"];
-                        }
-                        else
-                        {
-                            tableEntity["NotificationCount"] = 1;
-                        }
+                        // if (existingTableEntity.Value.GetInt32("NotificationCount") != 0)
+                        // {
+                        //     tableEntity["NotificationCount"] = existingTableEntity.Value["NotificationCount"];
+                        // }
+                        // else
+                        // {
+                        //     tableEntity["NotificationCount"] = 1;
+                        // }
 
-                        // Need to up the days since last notification
-                        tableEntity["DaysSinceLastNotification"] = (DateTime.ParseExact(today, "yyyy-MM-dd", null) - DateTime.ParseExact(existingTableEntity.Value["LastNotificationDate"].ToString(), "yyyy-MM-dd", null)).TotalDays;
+                        // // Need to up the days since last notification
+                        // tableEntity["DaysSinceLastNotification"] = (DateTime.ParseExact(today, "yyyy-MM-dd", null) - DateTime.ParseExact(existingTableEntity.Value["LastNotificationDate"].ToString(), "yyyy-MM-dd", null)).TotalDays;
 
-                        // check if we need to send a reminder
-                        var daysSinceLastNotification = tableEntity.GetDouble("DaysSinceLastNotification") ?? 0;
+                        // // check if we need to send a reminder
+                        // var daysSinceLastNotification = tableEntity.GetDouble("DaysSinceLastNotification") ?? 0;
 
-                        if (daysSinceLastNotification >= reminderInterval)
-                        {
-                            // Add to the notification count
-                            tableEntity["NotificationCount"] = (existingTableEntity.Value.GetInt32("NotificationCount") ?? 0) + 1;
+                        // if (daysSinceLastNotification >= reminderInterval)
+                        // {
+                        //     // Add to the notification count
+                        //     tableEntity["NotificationCount"] = (existingTableEntity.Value.GetInt32("NotificationCount") ?? 0) + 1;
 
-                            // Add to the last notification date
-                            tableEntity["LastNotificationDate"] = today;
-                        }
+                        //     // Add to the last notification date
+                        //     tableEntity["LastNotificationDate"] = today;
+                        // }
 
                         await _userLastUsageTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
                     }
@@ -859,6 +865,69 @@ namespace groveale.Services
                     await _userMonthlyTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
                 }
             }
+        }
+
+        public async Task<List<InactiveUser>> GetInactiveUsers(int days)
+        {
+            // query to find user with more than days inactivity
+            string filter = TableClient.CreateQueryFilter($"DaysSinceLastActivity ge {days}");
+
+            // Get the users
+            var users = new List<InactiveUser>();
+
+            _logger.LogInformation($"Filter: {filter}");
+
+            try {
+                var queryResults = _userLastUsageTableClient.QueryAsync<TableEntity>(filter);
+
+                await foreach (TableEntity entity in queryResults)
+                {
+
+                    users.Add(new InactiveUser
+                    {
+                        UPN = entity.PartitionKey,
+                        DaysSinceLastActivity = entity.GetDouble("DaysSinceLastActivity") ?? 0,
+                    });
+                }
+            } 
+            catch (RequestFailedException ex)
+            {
+                Console.WriteLine($"Error retrieving records: {ex.Message}");
+                
+            }
+            
+            return users;
+        }
+
+        public async Task<List<string>> GetUsersWithStreak(List<string> apps, int count)
+        {
+            // users
+            var users = new List<string>();
+
+            // build the query filter
+            string filter = string.Join(" or ", apps.Select(app => $"RowKey eq '{app}' and CurrentDailyStreak ge {count}"));
+
+            _logger.LogInformation($"Filter: {filter}");
+
+            try {
+                var queryResults = _userLastUsageTableClient.QueryAsync<TableEntity>(filter);
+
+                await foreach (TableEntity entity in queryResults)
+                {
+                    users.Add(entity.PartitionKey);
+                }
+            } 
+            catch (RequestFailedException ex)
+            {
+                Console.WriteLine($"Error retrieving records: {ex.Message}");
+                
+            }
+
+            // check we have a row for each app for each uses, group the list and check count is equal to apps count
+            var groupedUsers = users.GroupBy(u => u).Select(g => new { UPN = g.Key, Count = g.Count() }).ToList();
+            // filter the users to only those with a streak for all apps
+            users = groupedUsers.Where(g => g.Count == apps.Count).Select(g => g.UPN).ToList();
+            return users;
         }
     }
 }

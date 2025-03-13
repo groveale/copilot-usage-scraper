@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>copilot_usage_scraper</RootNamespace>
+    <UserSecretsId>830aaeaa-8082-43b5-9996-451cdbbbf4d0</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
