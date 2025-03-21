@@ -89,24 +89,7 @@ namespace groveale
                     var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivity(appList, count, timeFrame, startDate);
                     //var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivity(appList[0], count, timeFrame, startDate);
 
-                    if (timeFrame == "alltime")
-                    {
-                        // need to check we have the a user for every app in the list
-                        usersThatHaveAchieved = users
-                            .GroupBy(user => user)
-                            .Select(group => new
-                            {
-                                Username = group.Key,
-                                AppCount = group.Count()
-                            })
-                            .Where(user => user.AppCount >= appList.Count)
-                            .Select(user => user.Username)
-                            .ToList();
-                    }
-                    else
-                    {
-                        usersThatHaveAchieved = users;
-                    }
+                    usersThatHaveAchieved = users;
 
                 }
                 catch (Exception ex)

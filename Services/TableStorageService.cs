@@ -32,7 +32,8 @@ namespace groveale.Services
         Task SeedDailyActivitiesAsync(List<UserActivity> userActivitiesSeed);
         Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed);
         Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed);
-
+        Task SeedAllTimeActivityAsync(List<AllTimeUsage> userActivitiesSeed);
+        Task SeedInactiveUsersAsync(List<InactiveUser> inactiveUsersSeed);
 
     }
 
@@ -720,12 +721,28 @@ namespace groveale.Services
 
                 await foreach (TableEntity entity in queryResults)
                 {
+                    // if all time, we need to add the partition key as well
+                    if (timeFrame == "alltime")
+                    {
+                        users.Add(entity.PartitionKey);
+                        continue;
+                    }
+
                     users.Add(entity.RowKey);
                 }
             }
             catch (RequestFailedException ex)
             {
                 Console.WriteLine($"Error retrieving records: {ex.Message}");
+            }
+
+            // if all time
+            if (timeFrame == "alltime")
+            {
+                // check we have a row for each app for each uses, group the list and check count is equal to apps count
+                var groupedUsers = users.GroupBy(u => u).Select(g => new { UPN = g.Key, Count = g.Count() }).ToList();
+                // filter the users to only those with a streak for all apps
+                users = groupedUsers.Where(g => g.Count == apps.Count).Select(g => g.UPN).ToList();
             }
 
             // return some users for testing
@@ -867,10 +884,65 @@ namespace groveale.Services
             }
         }
 
+        public async Task SeedAllTimeActivityAsync(List<AllTimeUsage> userActivitiesSeed)
+        {
+            // Get daily table
+            foreach (var userEntity in userActivitiesSeed)
+            {
+                // Add user record
+                var tableEntity = new TableEntity(userEntity.UPN, userEntity.App.ToString())
+                {
+                    { "DisplayName", userEntity.DisplayName },
+                    { "DailyAllTimeActivityCount", userEntity.DailyAllTimeActivityCount },
+                    { "CurrentDailyStreak", userEntity.CurrentDailyStreak },
+                    { "BestDailyStreak", userEntity.BestDailyStreak }
+                };
+
+                try
+                {
+                    // Try to add the entity if it doesn't exist
+                    await _userAllTimeTableClient.AddEntityAsync(tableEntity);
+                    _logger.LogInformation($"Added alltime seed entity for {userEntity.UPN}");
+                }
+                catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
+                {
+                    // Merge the entity if it already exists
+                    await _userAllTimeTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                }
+            }
+        }
+
+        public async Task SeedInactiveUsersAsync(List<InactiveUser> userActivitiesSeed)
+        {
+            // Get daily table
+            foreach (var userEntity in userActivitiesSeed)
+            {
+                // Add user record
+                var tableEntity = new TableEntity(userEntity.UPN, userEntity.LastActivityDate.ToString("yyyy-MM-dd"))
+                {
+                    { "DaysSinceLastActivity", userEntity.DaysSinceLastActivity },
+                    { "LastActivityDate", userEntity.LastActivityDate },
+                    { "DisplayName", userEntity.DisplayName }
+                };
+
+                try
+                {
+                    // Try to add the entity if it doesn't exist
+                    await _userLastUsageTableClient.AddEntityAsync(tableEntity);
+                    _logger.LogInformation($"Added inactive seed entity for {userEntity.UPN}");
+                }
+                catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
+                {
+                    // Merge the entity if it already exists
+                    await _userLastUsageTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                }
+            }
+        }
+
         public async Task<List<InactiveUser>> GetInactiveUsers(int days)
         {
             // query to find user with more than days inactivity
-            string filter = TableClient.CreateQueryFilter($"DaysSinceLastActivity ge {days}");
+            string filter = TableClient.CreateQueryFilter($"DaysSinceLastActivity eq {days}");
 
             // Get the users
             var users = new List<InactiveUser>();
@@ -910,7 +982,7 @@ namespace groveale.Services
             _logger.LogInformation($"Filter: {filter}");
 
             try {
-                var queryResults = _userLastUsageTableClient.QueryAsync<TableEntity>(filter);
+                var queryResults = _userAllTimeTableClient.QueryAsync<TableEntity>(filter);
 
                 await foreach (TableEntity entity in queryResults)
                 {

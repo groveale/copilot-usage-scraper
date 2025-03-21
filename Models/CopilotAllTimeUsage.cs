@@ -17,7 +17,7 @@ public class AllTimeUsage
 
 public enum AppType
 {
-    CopilotAllUp,
+    All,
     CopilotChat,
     Teams,
     Outlook,

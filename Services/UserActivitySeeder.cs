@@ -8,6 +8,8 @@ namespace groveale.Services
         Task SeedDailyActivitiesAsync(string tenantId);
         Task SeedWeeklyActivitiesAsync(string tenantId);
         Task SeedMonthlyActivitiesAsync(string tenantId);
+        Task SeedAllTimeActivityAsync(string tenantId);
+        Task SeedInactiveUsersAsync(string tenantId);
     }
 
     public class UserActivitySeeder : IUserActivitySeeder
@@ -146,6 +148,82 @@ namespace groveale.Services
             await _storageSnapshotService.SeedWeeklyActivitiesAsync(activities);
 
             _logger.LogInformation("Seeding weekly activities for tenant {tenantId} completed.", tenantId);
+        }
+
+
+        public async Task SeedAllTimeActivityAsync(string tenantId)
+        {
+            _logger.LogInformation("Seeding all time activities for tenant {tenantId}...", tenantId);
+
+            var users = GetUsers(tenantId);
+
+            // Get all users
+            var random = new Random();
+            var activities = new List<AllTimeUsage>();
+
+            foreach (var (upn, displayName) in users)
+            {
+                foreach (var app in Enum.GetValues(typeof(AppType)).Cast<AppType>())
+                {
+                    // Create a simple activity entry with random boolean values
+                    var activity = new AllTimeUsage
+                    {
+                        UPN = upn,
+                        DisplayName = displayName,
+                        App = app,
+                        DailyAllTimeActivityCount = random.Next(100),
+                        BestDailyStreak = random.Next(30),
+                        CurrentDailyStreak = random.Next(30),
+
+                    };
+
+                    // add
+                    activities.Add(activity);
+                }
+            }
+
+            // Save user activities
+            await _storageSnapshotService.SeedAllTimeActivityAsync(activities);
+
+            _logger.LogInformation("Seeding all time activities for tenant {tenantId} completed.", tenantId);
+        }
+
+        public async Task SeedInactiveUsersAsync(string tenantId)
+        {
+            _logger.LogInformation("Seeding inactive users for tenant {tenantId}...", tenantId);
+
+            var users = GetUsers(tenantId);
+
+            // Get all users
+            var random = new Random();
+            var activities = new List<InactiveUser>();
+
+            int[] possibleDays = { 7, 14, 30, 60, 90 };
+
+            // Today
+            var today = DateTime.UtcNow.Date;
+
+            foreach (var (upn, displayName) in users)
+            {
+                // Create a simple activity entry with random boolean values
+                var activity = new InactiveUser
+                {
+                    UPN = upn,
+                    DaysSinceLastActivity = possibleDays[random.Next(0, possibleDays.Length)],
+                    DisplayName = displayName,
+
+                };
+
+                // Calculate LastActivityDate based on DaysSinceLastActivity
+                activity.LastActivityDate = today.AddDays(-activity.DaysSinceLastActivity);
+
+                activities.Add(activity);
+            }
+
+            // Save user activities
+            await _storageSnapshotService.SeedInactiveUsersAsync(activities);
+
+            _logger.LogInformation("Seeding inactive users for tenant {tenantId} completed.", tenantId);
         }
 
         private List<(string upn, string displayName)> GetUsers(string tenantId) =>

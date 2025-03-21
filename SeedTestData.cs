@@ -42,6 +42,8 @@ namespace groveale
                 await _userActivitySeeder.SeedDailyActivitiesAsync(tenantId);
                 await _userActivitySeeder.SeedWeeklyActivitiesAsync(tenantId);
                 await _userActivitySeeder.SeedMonthlyActivitiesAsync(tenantId);
+                await _userActivitySeeder.SeedAllTimeActivityAsync(tenantId);
+                await _userActivitySeeder.SeedInactiveUsersAsync(tenantId);
                 
             }
             catch (Exception ex)
