@@ -71,9 +71,7 @@ namespace groverale
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing usage data. {Message}", ex.Message);
-            }
-
-            
+            }            
  
         }
 

@@ -71,8 +71,11 @@ namespace groveale
 
             // Get current start date form time frame
             var startDateForTimeFrame = await _storageSnapshotService.GetStartDate(timeFrame);
-            if (startDateForTimeFrame == null && timeFrame != "alltime")
+            if (startDateForTimeFrame == null && timeFrame != "alltime" && demo != "true")
             {
+                // if startDateForTimeFrame is null then we have no data yet for this time frame
+                // return a 400 bad request with a message
+                _logger.LogInformation("No data yet for this time frame - wait until tomorrow");
                 return new BadRequestObjectResult("No data yet - wait until tomorrow");
             }
 
