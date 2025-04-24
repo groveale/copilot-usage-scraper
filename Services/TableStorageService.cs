@@ -13,8 +13,7 @@ namespace groveale.Services
 
         Task<List<CopilotReminderItem>> GetUsersForQueue();
 
-        Task UpdateUserWeeklySnapshots(UserActivity dailySnapshots);
-        Task UpdateUserMonthlySnapshots(UserActivity dailySnapshots);
+        Task UpdateUsersTimeFrameSnapshots(UserActivity dailySnapshots, string timeFrame);
         Task UpdateUserAllTimeSnapshots(UserActivity dailySnapshots);
 
         Task ResetUsersAppStreak(AppType appType, string upn);
@@ -204,73 +203,37 @@ namespace groveale.Services
 
                 var userEntity = ConvertToUserActivity(userSnap, aggregationEntity);
 
-
-
-                var tableEntity = new TableEntity(userEntity.ReportDate.ToString("yyyy-MM-dd"), userEntity.UPN)
-                {
-                    { "ReportDate", userEntity.ReportDate },
-                    { "DisplayName", userEntity.DisplayName },
-                    { "DailyTeamsActivity", userEntity.DailyTeamsActivity },
-                    { "DailyTeamsInteractionCount", userEntity.DailyTeamsInteractionCount },
-                    { "DailyOutlookActivity", userEntity.DailyOutlookActivity },
-                    { "DailyOutlookInteractionCount", userEntity.DailyOutlookInteractionCount },
-                    { "DailyWordActivity", userEntity.DailyWordActivity },
-                    { "DailyWordInteractionCount", userEntity.DailyWordInteractionCount },
-                    { "DailyExcelActivity", userEntity.DailyExcelActivity },
-                    { "DailyExcelInteractionCount", userEntity.DailyExcelInteractionCount },
-                    { "DailyPowerPointActivity", userEntity.DailyPowerPointActivity },
-                    { "DailyPowerPointInteractionCount", userEntity.DailyPowerPointInteractionCount },
-                    { "DailyOneNoteActivity", userEntity.DailyOneNoteActivity },
-                    { "DailyOneNoteInteractionCount", userEntity.DailyOneNoteInteractionCount },
-                    { "DailyLoopActivity", userEntity.DailyLoopActivity },
-                    { "DailyLoopInteractionCount", userEntity.DailyLoopInteractionCount },
-                    { "DailyCopilotChatActivity", userEntity.DailyCopilotChatActivity },
-                    { "DailyCopilotChatInteractionCount", userEntity.DailyCopilotChatInteractionCount },
-                    { "DailyAllActivity", userEntity.DailyCopilotAllUpActivity },
-                    { "DailyAllInteractionCount", userEntity.DailyAllInteractionCount },
-                    { "DailyMACActivity", userEntity.DailyMACActivity },
-                    { "DailyMACInteractionCount", userEntity.DailyMACInteractionCount },
-                    { "DailyDesignerActivity", userEntity.DailyDesignerActivity },
-                    { "DailyDesignerInteractionCount", userEntity.DailyDesignerInteractionCount },
-                    { "DailySharePointActivity", userEntity.DailySharePointActivity },
-                    { "DailySharePointInteractionCount", userEntity.DailySharePointInteractionCount },
-                    { "DailyPlannerActivity", userEntity.DailyPlannerActivity },
-                    { "DailyPlannerInteractionCount", userEntity.DailyPlannerInteractionCount },
-                    { "DailyWhiteboardActivity", userEntity.DailyWhiteboardActivity },
-                    { "DailyWhiteboardInteractionCount", userEntity.DailyWhiteboardInteractionCount },
-                    { "DailyStreamActivity", userEntity.DailyStreamActivity },
-                    { "DailyStreamInteractionCount", userEntity.DailyStreamInteractionCount },
-                    { "DailyFormsActivity", userEntity.DailyFormsActivity },
-                    { "DailyFormsInteractionCount", userEntity.DailyFormsInteractionCount },
-                    { "DailyWebPluginActivity", userEntity.DailyWebPluginActivity },
-                    { "DailyWebPluginInteractionCount", userEntity.DailyWebPluginInteractions },
-                    { "DailyCopilotActionActivity", userEntity.DailyCopilotActionActivity },
-                    { "DailyCopilotActionInteractionCount", userEntity.DailyCopilotActionCount }
-                };
-
                 try
                 {
                     // Try to add the entity if it doesn't exist
-                    await _userDAUTableClient.AddEntityAsync(tableEntity);
+                    await _userDAUTableClient.AddEntityAsync(userEntity.ToTableEntity());
                     DAUadded++;
 
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
                 {
                     // Merge the entity if it already exists
-                    await _userDAUTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                    await _userDAUTableClient.UpdateEntityAsync(userEntity.ToTableEntity(), ETag.All, TableUpdateMode.Merge);
                 }
-
-
 
 
                 // We need to update the last weekly, monthly and alltime tables
                 await UpdateUserAllTimeSnapshots(userEntity);
-                await UpdateUserWeeklySnapshots(userEntity);
-                await UpdateUserMonthlySnapshots(userEntity);
 
+                // Update Monthly
+                var firstOfMonthForSnapshot = userEntity.ReportDate
+                                .AddDays(-1 * userEntity.ReportDate.Day + 1)
+                                .ToString("yyyy-MM-dd");
 
+                await UpdateUsersTimeFrameSnapshots(userEntity, firstOfMonthForSnapshot);
 
+                // Update Weekly - Get our timeFrame
+                var date = userEntity.ReportDate;
+                var dayOfWeek = (int)userEntity.ReportDate.DayOfWeek;
+                var daysToSubtract = dayOfWeek == 0 ? 6 : dayOfWeek - 1; // Adjust for Sunday
+                var firstMondayOfWeeklySnapshot = date.AddDays(-daysToSubtract).ToString("yyyy-MM-dd");
+
+                await UpdateUsersTimeFrameSnapshots(userEntity, firstMondayOfWeeklySnapshot);
 
 
             }
@@ -431,10 +394,10 @@ namespace groveale.Services
             try
             {
                 // Get the existing entity
-                var existingTableEntity = await _userAllTimeTableClient.GetEntityAsync<TableEntity>(upn, appType.ToString());
+                var existingTableEntity = await _userAllTimeTableClient.GetEntityAsync<AllTimeUsage>(upn, appType.ToString());
                 // Perform your logic here with existingTableEntity
 
-                existingTableEntity.Value["CurrentDailyStreak"] = 0;
+                existingTableEntity.Value.CurrentDailyStreak = 0;
 
                 await _userAllTimeTableClient.UpdateEntityAsync(existingTableEntity.Value, ETag.All, TableUpdateMode.Merge);
 
@@ -459,23 +422,23 @@ namespace groveale.Services
                 try
                 {
                     // Get the existing entity
-                    var existingTableEntity = await _userAllTimeTableClient.GetEntityAsync<TableEntity>(userActivity.UPN, app);
+                    var existingTableEntity = await _userAllTimeTableClient.GetEntityAsync<AllTimeUsage>(userActivity.UPN, app.ToString());
 
                     // If usage 
                     if (dailyUsage)
                     {
                         // Increment the daily all time activity count
-                        existingTableEntity.Value["DailyAllTimeActivityCount"] = (int)existingTableEntity.Value["DailyAllTimeActivityCount"] + 1;
-                        existingTableEntity.Value["CurrentDailyStreak"] = (int)existingTableEntity.Value["DailyAllTimeActivityCount"] + 1;
-                        existingTableEntity.Value["BestDailyStreak"] = Math.Max((int)existingTableEntity.Value["BestDailyStreak"], (int)existingTableEntity.Value["CurrentDailyStreak"]);
-                        existingTableEntity.Value["AllTimeInteractionCount"] = (int)existingTableEntity.Value["AllTimeInteractionCount"] + interactionCount;
+                        existingTableEntity.Value.DailyAllTimeActivityCount = existingTableEntity.Value.DailyAllTimeActivityCount + 1;
+                        existingTableEntity.Value.CurrentDailyStreak = existingTableEntity.Value.CurrentDailyStreak + 1;
+                        existingTableEntity.Value.BestDailyStreak = Math.Max(existingTableEntity.Value.BestDailyStreak, existingTableEntity.Value.CurrentDailyStreak);
+                        existingTableEntity.Value.AllTimeInteractionCount = existingTableEntity.Value.AllTimeInteractionCount + interactionCount;
 
                         await _userAllTimeTableClient.UpdateEntityAsync(existingTableEntity.Value, ETag.All, TableUpdateMode.Merge);
                     }
                     else
                     {
                         // Reset the current daily streak
-                        existingTableEntity.Value["CurrentDailyStreak"] = 0;
+                        existingTableEntity.Value.CurrentDailyStreak = 0;
                         await _userAllTimeTableClient.UpdateEntityAsync(existingTableEntity.Value, ETag.All, TableUpdateMode.Merge);
                     }
                 }
@@ -483,15 +446,17 @@ namespace groveale.Services
                 {
 
                     // if usage create first item
-                    var newTableEntity = new TableEntity(userActivity.UPN, app)
+                    var newAllTimeUsage = new AllTimeUsage()
                     {
-                        { "DailyAllTimeActivityCount", dailyUsage ? 1 : 0 },
-                        { "AllTimeInteractionCount", interactionCount },
-                        { "CurrentDailyStreak", dailyUsage ? 1 : 0 },
-                        { "BestDailyStreak", dailyUsage ? 1 : 0 }
+                        UPN = userActivity.UPN,
+                        App = app,
+                        DailyAllTimeActivityCount = dailyUsage ? 1 : 0,
+                        AllTimeInteractionCount = interactionCount,
+                        CurrentDailyStreak = dailyUsage ? 1 : 0,
+                        BestDailyStreak = dailyUsage ? 1 : 0,
                     };
 
-                    await _userAllTimeTableClient.AddEntityAsync(newTableEntity);
+                    await _userAllTimeTableClient.AddEntityAsync(newAllTimeUsage.ToTableEntity());
                 }
                 catch (RequestFailedException ex)
                 {
@@ -500,213 +465,106 @@ namespace groveale.Services
             }
         }
 
-        public async Task UpdateUserMonthlySnapshots(UserActivity userActivity)
+        public async Task UpdateUsersTimeFrameSnapshots(UserActivity userActivity, string timeFrame)
         {
-            var firstOfMonthForSnapshot = userActivity.ReportDate
-                .AddDays(-1 * userActivity.ReportDate.Day + 1)
-                .ToString("yyyy-MM-dd");
-
+            
             try
             {
                 // Get the existing entity
-                var existingTableEntity = await _userMonthlyTableClient.GetEntityAsync<TableEntity>(firstOfMonthForSnapshot, userActivity.UPN);
+                var existingTableEntity = await _userMonthlyTableClient.GetEntityAsync<TimeFrameUsage>(timeFrame, userActivity.UPN);
 
                 // Increment the daily counts
-                existingTableEntity.Value["DailyTeamsActivityCount"] = (int)existingTableEntity.Value["DailyTeamsActivityCount"] + (userActivity.DailyTeamsActivity ? 1 : 0);
-                existingTableEntity.Value["DailyCopilotChatActivityCount"] = (int)existingTableEntity.Value["DailyCopilotChatActivityCount"] + (userActivity.DailyCopilotChatActivity ? 1 : 0);
-                existingTableEntity.Value["DailyOutlookActivityCount"] = (int)existingTableEntity.Value["DailyOutlookActivityCount"] + (userActivity.DailyOutlookActivity ? 1 : 0);
-                existingTableEntity.Value["DailyWordActivityCount"] = (int)existingTableEntity.Value["DailyWordActivityCount"] + (userActivity.DailyWordActivity ? 1 : 0);
-                existingTableEntity.Value["DailyExcelActivityCount"] = (int)existingTableEntity.Value["DailyExcelActivityCount"] + (userActivity.DailyExcelActivity ? 1 : 0);
-                existingTableEntity.Value["DailyPowerPointActivityCount"] = (int)existingTableEntity.Value["DailyPowerPointActivityCount"] + (userActivity.DailyPowerPointActivity ? 1 : 0);
-                existingTableEntity.Value["DailyOneNoteActivityCount"] = (int)existingTableEntity.Value["DailyOneNoteActivityCount"] + (userActivity.DailyOneNoteActivity ? 1 : 0);
-                existingTableEntity.Value["DailyLoopActivityCount"] = (int)existingTableEntity.Value["DailyLoopActivityCount"] + (userActivity.DailyLoopActivity ? 1 : 0);
-                existingTableEntity.Value["DailyAllActivityCount"] = (int)existingTableEntity.Value["DailyAllActivityCount"] + (userActivity.DailyCopilotAllUpActivity ? 1 : 0);
+                existingTableEntity.Value.DailyTeamsActivityCount += userActivity.DailyTeamsActivity ? 1 : 0;
+                existingTableEntity.Value.DailyCopilotChatActivityCount += userActivity.DailyCopilotChatActivity ? 1 : 0;
+                existingTableEntity.Value.DailyOutlookActivityCount += userActivity.DailyOutlookActivity ? 1 : 0;
+                existingTableEntity.Value.DailyWordActivityCount += userActivity.DailyWordActivity ? 1 : 0;
+                existingTableEntity.Value.DailyExcelActivityCount += userActivity.DailyExcelActivity ? 1 : 0;
+                existingTableEntity.Value.DailyPowerPointActivityCount += userActivity.DailyPowerPointActivity ? 1 : 0;
+                existingTableEntity.Value.DailyOneNoteActivityCount += userActivity.DailyOneNoteActivity ? 1 : 0;
+                existingTableEntity.Value.DailyLoopActivityCount += userActivity.DailyLoopActivity ? 1 : 0;
+                existingTableEntity.Value.DailyAllActivityCount += userActivity.DailyCopilotAllUpActivity ? 1 : 0;
 
                 // Increment additional activity counts
-                existingTableEntity.Value["DailyMACActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyMACActivityCount") ? existingTableEntity.Value["DailyMACActivityCount"] : 0) + (userActivity.DailyMACActivity ? 1 : 0);
-                existingTableEntity.Value["DailyDesignerActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyDesignerActivityCount") ? existingTableEntity.Value["DailyDesignerActivityCount"] : 0) + (userActivity.DailyDesignerActivity ? 1 : 0);
-                existingTableEntity.Value["DailySharePointActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailySharePointActivityCount") ? existingTableEntity.Value["DailySharePointActivityCount"] : 0) + (userActivity.DailySharePointActivity ? 1 : 0);
-                existingTableEntity.Value["DailyPlannerActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyPlannerActivityCount") ? existingTableEntity.Value["DailyPlannerActivityCount"] : 0) + (userActivity.DailyPlannerActivity ? 1 : 0);
-                existingTableEntity.Value["DailyWhiteboardActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyWhiteboardActivityCount") ? existingTableEntity.Value["DailyWhiteboardActivityCount"] : 0) + (userActivity.DailyWhiteboardActivity ? 1 : 0);
-                existingTableEntity.Value["DailyStreamActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyStreamActivityCount") ? existingTableEntity.Value["DailyStreamActivityCount"] : 0) + (userActivity.DailyStreamActivity ? 1 : 0);
-                existingTableEntity.Value["DailyFormsActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyFormsActivityCount") ? existingTableEntity.Value["DailyFormsActivityCount"] : 0) + (userActivity.DailyFormsActivity ? 1 : 0);
-                existingTableEntity.Value["DailyCopilotActionActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyCopilotActionActivityCount") ? existingTableEntity.Value["DailyCopilotActionActivityCount"] : 0) + (userActivity.DailyCopilotActionActivity ? 1 : 0);
-                existingTableEntity.Value["DailyWebPluginActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyWebPluginActivityCount") ? existingTableEntity.Value["DailyWebPluginActivityCount"] : 0) + (userActivity.DailyWebPluginActivity ? 1 : 0);
+                existingTableEntity.Value.DailyMACActivityCount += userActivity.DailyMACActivity ? 1 : 0;
+                existingTableEntity.Value.DailyDesignerActivityCount += userActivity.DailyDesignerActivity ? 1 : 0;
+                existingTableEntity.Value.DailySharePointActivityCount += userActivity.DailySharePointActivity ? 1 : 0;
+                existingTableEntity.Value.DailyPlannerActivityCount += userActivity.DailyPlannerActivity ? 1 : 0;
+                existingTableEntity.Value.DailyWhiteboardActivityCount += userActivity.DailyWhiteboardActivity ? 1 : 0;
+                existingTableEntity.Value.DailyStreamActivityCount += userActivity.DailyStreamActivity ? 1 : 0;
+                existingTableEntity.Value.DailyFormsActivityCount += userActivity.DailyFormsActivity ? 1 : 0;
+                existingTableEntity.Value.DailyCopilotActionActivityCount += userActivity.DailyCopilotActionActivity ? 1 : 0;
+                existingTableEntity.Value.DailyWebPluginActivityCount += userActivity.DailyWebPluginActivity ? 1 : 0;
 
                 // Increment interaction counts
-                existingTableEntity.Value["TeamsInteractionCount"] = (int)existingTableEntity.Value["TeamsInteractionCount"] + userActivity.DailyTeamsInteractionCount;
-                existingTableEntity.Value["CopilotChatInteractionCount"] = (int)existingTableEntity.Value["CopilotChatInteractionCount"] + userActivity.DailyCopilotChatInteractionCount;
-                existingTableEntity.Value["OutlookInteractionCount"] = (int)existingTableEntity.Value["OutlookInteractionCount"] + userActivity.DailyOutlookInteractionCount;
-                existingTableEntity.Value["WordInteractionCount"] = (int)existingTableEntity.Value["WordInteractionCount"] + userActivity.DailyWordInteractionCount;
-                existingTableEntity.Value["ExcelInteractionCount"] = (int)existingTableEntity.Value["ExcelInteractionCount"] + userActivity.DailyExcelInteractionCount;
-                existingTableEntity.Value["PowerPointInteractionCount"] = (int)existingTableEntity.Value["PowerPointInteractionCount"] + userActivity.DailyPowerPointInteractionCount;
-                existingTableEntity.Value["OneNoteInteractionCount"] = (int)existingTableEntity.Value["OneNoteInteractionCount"] + userActivity.DailyOneNoteInteractionCount;
-                existingTableEntity.Value["LoopInteractionCount"] = (int)existingTableEntity.Value["LoopInteractionCount"] + userActivity.DailyLoopInteractionCount;
-                existingTableEntity.Value["MACInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("MACInteractionCount") ? existingTableEntity.Value["MACInteractionCount"] : 0) + userActivity.DailyMACInteractionCount;
-                existingTableEntity.Value["DesignerInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("DesignerInteractionCount") ? existingTableEntity.Value["DesignerInteractionCount"] : 0) + userActivity.DailyDesignerInteractionCount;
-                existingTableEntity.Value["SharePointInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("SharePointInteractionCount") ? existingTableEntity.Value["SharePointInteractionCount"] : 0) + userActivity.DailySharePointInteractionCount;
-                existingTableEntity.Value["PlannerInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("PlannerInteractionCount") ? existingTableEntity.Value["PlannerInteractionCount"] : 0) + userActivity.DailyPlannerInteractionCount;
-                existingTableEntity.Value["WhiteboardInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("WhiteboardInteractionCount") ? existingTableEntity.Value["WhiteboardInteractionCount"] : 0) + userActivity.DailyWhiteboardInteractionCount;
-                existingTableEntity.Value["StreamInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("StreamInteractionCount") ? existingTableEntity.Value["StreamInteractionCount"] : 0) + userActivity.DailyStreamInteractionCount;
-                existingTableEntity.Value["FormsInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("FormsInteractionCount") ? existingTableEntity.Value["FormsInteractionCount"] : 0) + userActivity.DailyFormsInteractionCount;
-                existingTableEntity.Value["CopilotActionInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("CopilotActionInteractionCount") ? existingTableEntity.Value["CopilotActionInteractionCount"] : 0) + userActivity.DailyCopilotActionCount;
-                existingTableEntity.Value["WebPluginInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("WebPluginInteractionCount") ? existingTableEntity.Value["WebPluginInteractionCount"] : 0) + userActivity.DailyWebPluginInteractions;
-                existingTableEntity.Value["AllInteractionCount"] = (int)existingTableEntity.Value["AllInteractionCount"] + userActivity.DailyAllInteractionCount;
+                existingTableEntity.Value.TeamsInteractionCount += userActivity.DailyTeamsInteractionCount;
+                existingTableEntity.Value.CopilotChatInteractionCount += userActivity.DailyCopilotChatInteractionCount;
+                existingTableEntity.Value.OutlookInteractionCount += userActivity.DailyOutlookInteractionCount;
+                existingTableEntity.Value.WordInteractionCount += userActivity.DailyWordInteractionCount;
+                existingTableEntity.Value.ExcelInteractionCount += userActivity.DailyExcelInteractionCount;
+                existingTableEntity.Value.PowerPointInteractionCount += userActivity.DailyPowerPointInteractionCount;
+                existingTableEntity.Value.OneNoteInteractionCount += userActivity.DailyOneNoteInteractionCount;
+                existingTableEntity.Value.LoopInteractionCount += userActivity.DailyLoopInteractionCount;
+                existingTableEntity.Value.MACInteractionCount += userActivity.DailyMACInteractionCount;
+                existingTableEntity.Value.DesignerInteractionCount += userActivity.DailyDesignerInteractionCount;
+                existingTableEntity.Value.SharePointInteractionCount += userActivity.DailySharePointInteractionCount;
+                existingTableEntity.Value.PlannerInteractionCount += userActivity.DailyPlannerInteractionCount;
+                existingTableEntity.Value.WhiteboardInteractionCount += userActivity.DailyWhiteboardInteractionCount;
+                existingTableEntity.Value.StreamInteractionCount += userActivity.DailyStreamInteractionCount;
+                existingTableEntity.Value.FormsInteractionCount += userActivity.DailyFormsInteractionCount;
+                existingTableEntity.Value.CopilotActionInteractionCount += userActivity.DailyCopilotActionCount;
+                existingTableEntity.Value.WebPluginInteractionCount += userActivity.DailyWebPluginInteractions;
+                existingTableEntity.Value.AllInteractionCount += userActivity.DailyAllInteractionCount;
 
-
+                // Update the entity in the table
                 await _userMonthlyTableClient.UpdateEntityAsync(existingTableEntity.Value, ETag.All, TableUpdateMode.Merge);
+
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
                 // Entity not found - create new entity
-                var newTableEntity = new TableEntity(firstOfMonthForSnapshot, userActivity.UPN)
+                var newEntity = new TimeFrameUsage
                 {
-
-                    { "DailyTeamsActivityCount", userActivity.DailyTeamsActivity ? 1 : 0 },
-                    { "DailyCopilotChatActivityCount", userActivity.DailyCopilotChatActivity ? 1 : 0 },
-                    { "DailyOutlookActivityCount", userActivity.DailyOutlookActivity ? 1 : 0 },
-                    { "DailyWordActivityCount", userActivity.DailyWordActivity ? 1 : 0 },
-                    { "DailyExcelActivityCount", userActivity.DailyExcelActivity ? 1 : 0 },
-                    { "DailyPowerPointActivityCount", userActivity.DailyPowerPointActivity ? 1 : 0 },
-                    { "DailyOneNoteActivityCount", userActivity.DailyOneNoteActivity ? 1 : 0 },
-                    { "DailyLoopActivityCount", userActivity.DailyLoopActivity ? 1 : 0 },
-                    { "DailyAllActivityCount", userActivity.DailyCopilotAllUpActivity ? 1 : 0 },
-                    { "DailyMACActivityCount", userActivity.DailyMACActivity ? 1 : 0 },
-                    { "DailyDesignerActivityCount", userActivity.DailyDesignerActivity ? 1 : 0 },
-                    { "DailySharePointActivityCount", userActivity.DailySharePointActivity ? 1 : 0 },
-                    { "DailyPlannerActivityCount", userActivity.DailyPlannerActivity ? 1 : 0 },
-                    { "DailyWhiteboardActivityCount", userActivity.DailyWhiteboardActivity ? 1 : 0 },
-                    { "DailyStreamActivityCount", userActivity.DailyStreamActivity ? 1 : 0 },
-                    { "DailyFormsActivityCount", userActivity.DailyFormsActivity ? 1 : 0 },
-                    { "DailyCopilotActionActivityCount", userActivity.DailyCopilotActionActivity ? 1 : 0 },
-                    { "DailyWebPluginActivityCount", userActivity.DailyWebPluginActivity ? 1 : 0 },
-                    { "TeamsInteractionCount", userActivity.DailyTeamsInteractionCount },
-                    { "CopilotChatInteractionCount", userActivity.DailyCopilotChatInteractionCount },
-                    { "OutlookInteractionCount", userActivity.DailyOutlookInteractionCount },
-                    { "WordInteractionCount", userActivity.DailyWordInteractionCount },
-                    { "ExcelInteractionCount", userActivity.DailyExcelInteractionCount },
-                    { "PowerPointInteractionCount", userActivity.DailyPowerPointInteractionCount },
-                    { "OneNoteInteractionCount", userActivity.DailyOneNoteInteractionCount },
-                    { "LoopInteractionCount", userActivity.DailyLoopInteractionCount },
-                    { "MACInteractionCount", userActivity.DailyMACInteractionCount },
-                    { "DesignerInteractionCount", userActivity.DailyDesignerInteractionCount },
-                    { "SharePointInteractionCount", userActivity.DailySharePointInteractionCount },
-                    { "PlannerInteractionCount", userActivity.DailyPlannerInteractionCount },
-                    { "WhiteboardInteractionCount", userActivity.DailyWhiteboardInteractionCount },
-                    { "StreamInteractionCount", userActivity.DailyStreamInteractionCount },
-                    { "FormsInteractionCount", userActivity.DailyFormsInteractionCount },
-                    { "CopilotActionInteractionCount", userActivity.DailyCopilotActionCount },
-                    { "WebPluginInteractionCount", userActivity.DailyWebPluginInteractions },
-                    { "AllInteractionCount", userActivity.DailyAllInteractionCount }
+                    StartDate = DateTime.Parse(timeFrame),
+                    UPN = userActivity.UPN,
+                    DailyTeamsActivityCount = userActivity.DailyTeamsActivity ? 1 : 0,
+                    DailyCopilotChatActivityCount = userActivity.DailyCopilotChatActivity ? 1 : 0,
+                    DailyOutlookActivityCount = userActivity.DailyOutlookActivity ? 1 : 0,
+                    DailyWordActivityCount = userActivity.DailyWordActivity ? 1 : 0,
+                    DailyExcelActivityCount = userActivity.DailyExcelActivity ? 1 : 0,
+                    DailyPowerPointActivityCount = userActivity.DailyPowerPointActivity ? 1 : 0,
+                    DailyOneNoteActivityCount = userActivity.DailyOneNoteActivity ? 1 : 0,
+                    DailyLoopActivityCount = userActivity.DailyLoopActivity ? 1 : 0,
+                    DailyAllActivityCount = userActivity.DailyCopilotAllUpActivity ? 1 : 0,
+                    DailyMACActivityCount = userActivity.DailyMACActivity ? 1 : 0,
+                    DailyDesignerActivityCount = userActivity.DailyDesignerActivity ? 1 : 0,
+                    DailySharePointActivityCount = userActivity.DailySharePointActivity ? 1 : 0,
+                    DailyPlannerActivityCount = userActivity.DailyPlannerActivity ? 1 : 0,
+                    DailyWhiteboardActivityCount = userActivity.DailyWhiteboardActivity ? 1 : 0,
+                    DailyStreamActivityCount = userActivity.DailyStreamActivity ? 1 : 0,
+                    DailyFormsActivityCount = userActivity.DailyFormsActivity ? 1 : 0,
+                    DailyCopilotActionActivityCount = userActivity.DailyCopilotActionActivity ? 1 : 0,
+                    DailyWebPluginActivityCount = userActivity.DailyWebPluginActivity ? 1 : 0,
+                    TeamsInteractionCount = userActivity.DailyTeamsInteractionCount,
+                    CopilotChatInteractionCount = userActivity.DailyCopilotChatInteractionCount,
+                    OutlookInteractionCount = userActivity.DailyOutlookInteractionCount,
+                    WordInteractionCount = userActivity.DailyWordInteractionCount,
+                    ExcelInteractionCount = userActivity.DailyExcelInteractionCount,
+                    PowerPointInteractionCount = userActivity.DailyPowerPointInteractionCount,
+                    OneNoteInteractionCount = userActivity.DailyOneNoteInteractionCount,
+                    LoopInteractionCount = userActivity.DailyLoopInteractionCount,
+                    MACInteractionCount = userActivity.DailyMACInteractionCount,
+                    DesignerInteractionCount = userActivity.DailyDesignerInteractionCount,
+                    SharePointInteractionCount = userActivity.DailySharePointInteractionCount,
+                    PlannerInteractionCount = userActivity.DailyPlannerInteractionCount,
+                    WhiteboardInteractionCount = userActivity.DailyWhiteboardInteractionCount,
+                    StreamInteractionCount = userActivity.DailyStreamInteractionCount,
+                    FormsInteractionCount = userActivity.DailyFormsInteractionCount,
+                    CopilotActionInteractionCount = userActivity.DailyCopilotActionCount,
+                    WebPluginInteractionCount = userActivity.DailyWebPluginInteractions,
+                    AllInteractionCount = userActivity.DailyAllInteractionCount
                 };
 
-                await _userMonthlyTableClient.AddEntityAsync(newTableEntity);
-            }
-            catch (RequestFailedException ex)
-            {
-                Console.WriteLine($"Error updating records: {ex.Message}");
-            }
-        }
-
-        public async Task UpdateUserWeeklySnapshots(UserActivity userActivity)
-        {
-            var date = userActivity.ReportDate;
-            var dayOfWeek = (int)date.DayOfWeek;
-            var daysToSubtract = dayOfWeek == 0 ? 6 : dayOfWeek - 1; // Adjust for Sunday
-            var firstMondayOfWeeklySnapshot = date.AddDays(-daysToSubtract).ToString("yyyy-MM-dd");
-
-            try
-            {
-                // Get the existing entity
-                var existingTableEntity = await _userWeeklyTableClient.GetEntityAsync<TableEntity>(firstMondayOfWeeklySnapshot, userActivity.UPN);
-
-                // Increment the daily counts
-                existingTableEntity.Value["DailyTeamsActivityCount"] = (int)existingTableEntity.Value["DailyTeamsActivityCount"] + (userActivity.DailyTeamsActivity ? 1 : 0);
-                existingTableEntity.Value["DailyCopilotChatActivityCount"] = (int)existingTableEntity.Value["DailyCopilotChatActivityCount"] + (userActivity.DailyCopilotChatActivity ? 1 : 0);
-                existingTableEntity.Value["DailyOutlookActivityCount"] = (int)existingTableEntity.Value["DailyOutlookActivityCount"] + (userActivity.DailyOutlookActivity ? 1 : 0);
-                existingTableEntity.Value["DailyWordActivityCount"] = (int)existingTableEntity.Value["DailyWordActivityCount"] + (userActivity.DailyWordActivity ? 1 : 0);
-                existingTableEntity.Value["DailyExcelActivityCount"] = (int)existingTableEntity.Value["DailyExcelActivityCount"] + (userActivity.DailyExcelActivity ? 1 : 0);
-                existingTableEntity.Value["DailyPowerPointActivityCount"] = (int)existingTableEntity.Value["DailyPowerPointActivityCount"] + (userActivity.DailyPowerPointActivity ? 1 : 0);
-                existingTableEntity.Value["DailyOneNoteActivityCount"] = (int)existingTableEntity.Value["DailyOneNoteActivityCount"] + (userActivity.DailyOneNoteActivity ? 1 : 0);
-                existingTableEntity.Value["DailyLoopActivityCount"] = (int)existingTableEntity.Value["DailyLoopActivityCount"] + (userActivity.DailyLoopActivity ? 1 : 0);
-                existingTableEntity.Value["DailyAllActivityCount"] = (int)existingTableEntity.Value["DailyAllActivityCount"] + (userActivity.DailyCopilotAllUpActivity ? 1 : 0);
-
-                // Increment additional activity counts
-                existingTableEntity.Value["DailyMACActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyMACActivityCount") ? existingTableEntity.Value["DailyMACActivityCount"] : 0) + (userActivity.DailyMACActivity ? 1 : 0);
-                existingTableEntity.Value["DailyDesignerActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyDesignerActivityCount") ? existingTableEntity.Value["DailyDesignerActivityCount"] : 0) + (userActivity.DailyDesignerActivity ? 1 : 0);
-                existingTableEntity.Value["DailySharePointActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailySharePointActivityCount") ? existingTableEntity.Value["DailySharePointActivityCount"] : 0) + (userActivity.DailySharePointActivity ? 1 : 0);
-                existingTableEntity.Value["DailyPlannerActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyPlannerActivityCount") ? existingTableEntity.Value["DailyPlannerActivityCount"] : 0) + (userActivity.DailyPlannerActivity ? 1 : 0);
-                existingTableEntity.Value["DailyWhiteboardActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyWhiteboardActivityCount") ? existingTableEntity.Value["DailyWhiteboardActivityCount"] : 0) + (userActivity.DailyWhiteboardActivity ? 1 : 0);
-                existingTableEntity.Value["DailyStreamActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyStreamActivityCount") ? existingTableEntity.Value["DailyStreamActivityCount"] : 0) + (userActivity.DailyStreamActivity ? 1 : 0);
-                existingTableEntity.Value["DailyFormsActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyFormsActivityCount") ? existingTableEntity.Value["DailyFormsActivityCount"] : 0) + (userActivity.DailyFormsActivity ? 1 : 0);
-                existingTableEntity.Value["DailyCopilotActionActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyCopilotActionActivityCount") ? existingTableEntity.Value["DailyCopilotActionActivityCount"] : 0) + (userActivity.DailyCopilotActionActivity ? 1 : 0);
-                existingTableEntity.Value["DailyWebPluginActivityCount"] = (int)(existingTableEntity.Value.ContainsKey("DailyWebPluginActivityCount") ? existingTableEntity.Value["DailyWebPluginActivityCount"] : 0) + (userActivity.DailyWebPluginActivity ? 1 : 0);
-
-                // Increment interaction counts
-                existingTableEntity.Value["TeamsInteractionCount"] = (int)existingTableEntity.Value["TeamsInteractionCount"] + userActivity.DailyTeamsInteractionCount;
-                existingTableEntity.Value["CopilotChatInteractionCount"] = (int)existingTableEntity.Value["CopilotChatInteractionCount"] + userActivity.DailyCopilotChatInteractionCount;
-                existingTableEntity.Value["OutlookInteractionCount"] = (int)existingTableEntity.Value["OutlookInteractionCount"] + userActivity.DailyOutlookInteractionCount;
-                existingTableEntity.Value["WordInteractionCount"] = (int)existingTableEntity.Value["WordInteractionCount"] + userActivity.DailyWordInteractionCount;
-                existingTableEntity.Value["ExcelInteractionCount"] = (int)existingTableEntity.Value["ExcelInteractionCount"] + userActivity.DailyExcelInteractionCount;
-                existingTableEntity.Value["PowerPointInteractionCount"] = (int)existingTableEntity.Value["PowerPointInteractionCount"] + userActivity.DailyPowerPointInteractionCount;
-                existingTableEntity.Value["OneNoteInteractionCount"] = (int)existingTableEntity.Value["OneNoteInteractionCount"] + userActivity.DailyOneNoteInteractionCount;
-                existingTableEntity.Value["LoopInteractionCount"] = (int)existingTableEntity.Value["LoopInteractionCount"] + userActivity.DailyLoopInteractionCount;
-                existingTableEntity.Value["MACInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("MACInteractionCount") ? existingTableEntity.Value["MACInteractionCount"] : 0) + userActivity.DailyMACInteractionCount;
-                existingTableEntity.Value["DesignerInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("DesignerInteractionCount") ? existingTableEntity.Value["DesignerInteractionCount"] : 0) + userActivity.DailyDesignerInteractionCount;
-                existingTableEntity.Value["SharePointInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("SharePointInteractionCount") ? existingTableEntity.Value["SharePointInteractionCount"] : 0) + userActivity.DailySharePointInteractionCount;
-                existingTableEntity.Value["PlannerInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("PlannerInteractionCount") ? existingTableEntity.Value["PlannerInteractionCount"] : 0) + userActivity.DailyPlannerInteractionCount;
-                existingTableEntity.Value["WhiteboardInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("WhiteboardInteractionCount") ? existingTableEntity.Value["WhiteboardInteractionCount"] : 0) + userActivity.DailyWhiteboardInteractionCount;
-                existingTableEntity.Value["StreamInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("StreamInteractionCount") ? existingTableEntity.Value["StreamInteractionCount"] : 0) + userActivity.DailyStreamInteractionCount;
-                existingTableEntity.Value["FormsInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("FormsInteractionCount") ? existingTableEntity.Value["FormsInteractionCount"] : 0) + userActivity.DailyFormsInteractionCount;
-                existingTableEntity.Value["CopilotActionInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("CopilotActionInteractionCount") ? existingTableEntity.Value["CopilotActionInteractionCount"] : 0) + userActivity.DailyCopilotActionCount;
-                existingTableEntity.Value["WebPluginInteractionCount"] = (int)(existingTableEntity.Value.ContainsKey("WebPluginInteractionCount") ? existingTableEntity.Value["WebPluginInteractionCount"] : 0) + userActivity.DailyWebPluginInteractions;
-                existingTableEntity.Value["AllInteractionCount"] = (int)existingTableEntity.Value["AllInteractionCount"] + userActivity.DailyAllInteractionCount;
-                await _userWeeklyTableClient.UpdateEntityAsync(existingTableEntity.Value, ETag.All, TableUpdateMode.Merge);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 404)
-            {
-                // Entity not found - create new entity
-                var newTableEntity = new TableEntity(firstMondayOfWeeklySnapshot, userActivity.UPN)
-                {
-                    { "DailyTeamsActivityCount", userActivity.DailyTeamsActivity ? 1 : 0 },
-                    { "DailyCopilotChatActivityCount", userActivity.DailyCopilotChatActivity ? 1 : 0 },
-                    { "DailyOutlookActivityCount", userActivity.DailyOutlookActivity ? 1 : 0 },
-                    { "DailyWordActivityCount", userActivity.DailyWordActivity ? 1 : 0 },
-                    { "DailyExcelActivityCount", userActivity.DailyExcelActivity ? 1 : 0 },
-                    { "DailyPowerPointActivityCount", userActivity.DailyPowerPointActivity ? 1 : 0 },
-                    { "DailyOneNoteActivityCount", userActivity.DailyOneNoteActivity ? 1 : 0 },
-                    { "DailyLoopActivityCount", userActivity.DailyLoopActivity ? 1 : 0 },
-                    { "DailyAllActivityCount", userActivity.DailyCopilotAllUpActivity ? 1 : 0 },
-                    { "DailyMACActivityCount", userActivity.DailyMACActivity ? 1 : 0 },
-                    { "DailyDesignerActivityCount", userActivity.DailyDesignerActivity ? 1 : 0 },
-                    { "DailySharePointActivityCount", userActivity.DailySharePointActivity ? 1 : 0 },
-                    { "DailyPlannerActivityCount", userActivity.DailyPlannerActivity ? 1 : 0 },
-                    { "DailyWhiteboardActivityCount", userActivity.DailyWhiteboardActivity ? 1 : 0 },
-                    { "DailyStreamActivityCount", userActivity.DailyStreamActivity ? 1 : 0 },
-                    { "DailyFormsActivityCount", userActivity.DailyFormsActivity ? 1 : 0 },
-                    { "DailyCopilotActionActivityCount", userActivity.DailyCopilotActionActivity ? 1 : 0 },
-                    { "DailyWebPluginActivityCount", userActivity.DailyWebPluginActivity ? 1 : 0 },
-                    { "TeamsInteractionCount", userActivity.DailyTeamsInteractionCount },
-                    { "CopilotChatInteractionCount", userActivity.DailyCopilotChatInteractionCount },
-                    { "OutlookInteractionCount", userActivity.DailyOutlookInteractionCount },
-                    { "WordInteractionCount", userActivity.DailyWordInteractionCount },
-                    { "ExcelInteractionCount", userActivity.DailyExcelInteractionCount },
-                    { "PowerPointInteractionCount", userActivity.DailyPowerPointInteractionCount },
-                    { "OneNoteInteractionCount", userActivity.DailyOneNoteInteractionCount },
-                    { "LoopInteractionCount", userActivity.DailyLoopInteractionCount },
-                    { "MACInteractionCount", userActivity.DailyMACInteractionCount },
-                    { "DesignerInteractionCount", userActivity.DailyDesignerInteractionCount },
-                    { "SharePointInteractionCount", userActivity.DailySharePointInteractionCount },
-                    { "PlannerInteractionCount", userActivity.DailyPlannerInteractionCount },
-                    { "WhiteboardInteractionCount", userActivity.DailyWhiteboardInteractionCount },
-                    { "StreamInteractionCount", userActivity.DailyStreamInteractionCount },
-                    { "FormsInteractionCount", userActivity.DailyFormsInteractionCount },
-                    { "CopilotActionInteractionCount", userActivity.DailyCopilotActionCount },
-                    { "WebPluginInteractionCount", userActivity.DailyWebPluginInteractions },
-                    { "AllInteractionCount", userActivity.DailyAllInteractionCount }
-                };
-
-                await _userWeeklyTableClient.AddEntityAsync(newTableEntity);
+                await _userMonthlyTableClient.AddEntityAsync(newEntity.ToTableEntity());
             }
             catch (RequestFailedException ex)
             {
@@ -833,29 +691,29 @@ namespace groveale.Services
             };
         }
 
-        private Dictionary<string, Tuple<bool,int>> ConvertToUsageDictionary(UserActivity userActivity)
+        private Dictionary<AppType, Tuple<bool, int>> ConvertToUsageDictionary(UserActivity userActivity)
         {
-            
-            var usage = new Dictionary<string, Tuple<bool,int>>
+
+            var usage = new Dictionary<AppType, Tuple<bool, int>>
             {
-                { "Teams", new Tuple<bool,int>(userActivity.DailyTeamsActivity, userActivity.DailyTeamsInteractionCount) },
-                { "Outlook", new Tuple<bool,int>(userActivity.DailyOutlookActivity, userActivity.DailyOutlookInteractionCount) },
-                { "Word", new Tuple<bool,int>(userActivity.DailyWordActivity, userActivity.DailyWordInteractionCount) },
-                { "Excel", new Tuple<bool,int>(userActivity.DailyExcelActivity, userActivity.DailyExcelInteractionCount) },
-                { "PowerPoint", new Tuple<bool,int>(userActivity.DailyPowerPointActivity, userActivity.DailyPowerPointInteractionCount) },
-                { "OneNote", new Tuple<bool,int>(userActivity.DailyOneNoteActivity, userActivity.DailyOneNoteInteractionCount) },
-                { "Loop", new Tuple<bool,int>(userActivity.DailyLoopActivity, userActivity.DailyLoopInteractionCount) },
-                { "CopilotChat", new Tuple<bool,int>(userActivity.DailyCopilotChatActivity, userActivity.DailyCopilotChatInteractionCount) },
-                { "All", new Tuple<bool,int>(userActivity.DailyCopilotAllUpActivity, userActivity.DailyAllInteractionCount) },
-                { "MAC", new Tuple<bool,int>(userActivity.DailyMACActivity, userActivity.DailyMACInteractionCount) },
-                { "Designer", new Tuple<bool,int>(userActivity.DailyDesignerActivity, userActivity.DailyDesignerInteractionCount) },
-                { "SharePoint", new Tuple<bool,int>(userActivity.DailySharePointActivity, userActivity.DailySharePointInteractionCount) },
-                { "Planner", new Tuple<bool,int>(userActivity.DailyPlannerActivity, userActivity.DailyPlannerInteractionCount) },
-                { "Whiteboard", new Tuple<bool,int>(userActivity.DailyWhiteboardActivity, userActivity.DailyWhiteboardInteractionCount) },
-                { "Stream", new Tuple<bool,int>(userActivity.DailyStreamActivity, userActivity.DailyStreamInteractionCount) },
-                { "Forms", new Tuple<bool,int>(userActivity.DailyFormsActivity, userActivity.DailyFormsInteractionCount) },
-                { "CopilotAction", new Tuple<bool,int>(userActivity.DailyCopilotActionActivity, userActivity.DailyCopilotActionCount) },
-                { "WebPlugin", new Tuple<bool,int>(userActivity.DailyWebPluginActivity, userActivity.DailyWebPluginInteractions) }
+                { AppType.Teams, new Tuple<bool,int>(userActivity.DailyTeamsActivity, userActivity.DailyTeamsInteractionCount) },
+                { AppType.Outlook, new Tuple<bool,int>(userActivity.DailyOutlookActivity, userActivity.DailyOutlookInteractionCount) },
+                { AppType.Word, new Tuple<bool,int>(userActivity.DailyWordActivity, userActivity.DailyWordInteractionCount) },
+                { AppType.Excel, new Tuple<bool,int>(userActivity.DailyExcelActivity, userActivity.DailyExcelInteractionCount) },
+                { AppType.PowerPoint, new Tuple<bool,int>(userActivity.DailyPowerPointActivity, userActivity.DailyPowerPointInteractionCount) },
+                { AppType.OneNote, new Tuple<bool,int>(userActivity.DailyOneNoteActivity, userActivity.DailyOneNoteInteractionCount) },
+                { AppType.Loop, new Tuple<bool,int>(userActivity.DailyLoopActivity, userActivity.DailyLoopInteractionCount) },
+                { AppType.CopilotChat, new Tuple<bool,int>(userActivity.DailyCopilotChatActivity, userActivity.DailyCopilotChatInteractionCount) },
+                { AppType.All, new Tuple<bool,int>(userActivity.DailyCopilotAllUpActivity, userActivity.DailyAllInteractionCount) },
+                { AppType.MAC, new Tuple<bool,int>(userActivity.DailyMACActivity, userActivity.DailyMACInteractionCount) },
+                { AppType.Designer, new Tuple<bool,int>(userActivity.DailyDesignerActivity, userActivity.DailyDesignerInteractionCount) },
+                { AppType.SharePoint, new Tuple<bool,int>(userActivity.DailySharePointActivity, userActivity.DailySharePointInteractionCount) },
+                { AppType.Planner, new Tuple<bool,int>(userActivity.DailyPlannerActivity, userActivity.DailyPlannerInteractionCount) },
+                { AppType.Whiteboard, new Tuple<bool,int>(userActivity.DailyWhiteboardActivity, userActivity.DailyWhiteboardInteractionCount) },
+                { AppType.Stream, new Tuple<bool,int>(userActivity.DailyStreamActivity, userActivity.DailyStreamInteractionCount) },
+                { AppType.Forms, new Tuple<bool,int>(userActivity.DailyFormsActivity, userActivity.DailyFormsInteractionCount) },
+                { AppType.CopilotAction, new Tuple<bool,int>(userActivity.DailyCopilotActionActivity, userActivity.DailyCopilotActionCount) },
+                { AppType.WebPlugin, new Tuple<bool,int>(userActivity.DailyWebPluginActivity, userActivity.DailyWebPluginInteractions) }
             };
 
             return usage;
@@ -1033,7 +891,8 @@ namespace groveale.Services
                     { "DailyOneNoteActivity", userEntity.DailyOneNoteActivity },
                     { "DailyLoopActivity", userEntity.DailyLoopActivity },
                     { "DailyCopilotChatActivity", userEntity.DailyCopilotChatActivity },
-                    { "DailyAllActivity", userEntity.DailyCopilotAllUpActivity }
+                    { "DailyAllActivity", userEntity.DailyCopilotAllUpActivity },
+
                 };
 
                 try

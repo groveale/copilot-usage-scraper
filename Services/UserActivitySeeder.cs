@@ -137,6 +137,7 @@ namespace groveale.Services
                     DailyPowerPointActivityCount = random.Next(5),
                     DailyOneNoteActivityCount = random.Next(5),
                     DailyLoopActivityCount = random.Next(5)
+                    
                 };
 
                 // Calculate DailyCopilotAllUpActivity, heightest of the other activities

@@ -1,4 +1,7 @@
-public class UserActivity
+using Azure.Data.Tables;
+using groveale.Models;
+
+public class UserActivity : BaseTableEntity
 {
     public DateTime ReportDate { get; set; }
     public string UPN { get; set; }
@@ -58,4 +61,52 @@ public class UserActivity
 
     public bool DailyWebPluginActivity { get; set; }
     public int DailyWebPluginInteractions { get; set; }
+
+    // Converts the UserActivity object to a TableEntity
+    public TableEntity ToTableEntity()
+    {
+        PartitionKey = ReportDate.ToString("yyyy-MM-dd");;
+        RowKey = UPN;
+
+        return new TableEntity(PartitionKey, RowKey)
+        {
+            { nameof(DisplayName), DisplayName },
+            { nameof(DailyTeamsActivity), DailyTeamsActivity },
+            { nameof(DailyTeamsInteractionCount), DailyTeamsInteractionCount },
+            { nameof(DailyCopilotChatActivity), DailyCopilotChatActivity },
+            { nameof(DailyCopilotChatInteractionCount), DailyCopilotChatInteractionCount },
+            { nameof(DailyOutlookActivity), DailyOutlookActivity },
+            { nameof(DailyOutlookInteractionCount), DailyOutlookInteractionCount },
+            { nameof(DailyWordActivity), DailyWordActivity },
+            { nameof(DailyWordInteractionCount), DailyWordInteractionCount },
+            { nameof(DailyExcelActivity), DailyExcelActivity },
+            { nameof(DailyExcelInteractionCount), DailyExcelInteractionCount },
+            { nameof(DailyPowerPointActivity), DailyPowerPointActivity },
+            { nameof(DailyPowerPointInteractionCount), DailyPowerPointInteractionCount },
+            { nameof(DailyOneNoteActivity), DailyOneNoteActivity },
+            { nameof(DailyOneNoteInteractionCount), DailyOneNoteInteractionCount },
+            { nameof(DailyLoopActivity), DailyLoopActivity },
+            { nameof(DailyLoopInteractionCount), DailyLoopInteractionCount },
+            { nameof(DailyCopilotAllUpActivity), DailyCopilotAllUpActivity },
+            { nameof(DailyAllInteractionCount), DailyAllInteractionCount },
+            { nameof(DailyMACActivity), DailyMACActivity },
+            { nameof(DailyMACInteractionCount), DailyMACInteractionCount },
+            { nameof(DailyDesignerActivity), DailyDesignerActivity },
+            { nameof(DailyDesignerInteractionCount), DailyDesignerInteractionCount },
+            { nameof(DailySharePointActivity), DailySharePointActivity },
+            { nameof(DailySharePointInteractionCount), DailySharePointInteractionCount },
+            { nameof(DailyPlannerActivity), DailyPlannerActivity },
+            { nameof(DailyPlannerInteractionCount), DailyPlannerInteractionCount },
+            { nameof(DailyWhiteboardActivity), DailyWhiteboardActivity },
+            { nameof(DailyWhiteboardInteractionCount), DailyWhiteboardInteractionCount },
+            { nameof(DailyStreamActivity), DailyStreamActivity },
+            { nameof(DailyStreamInteractionCount), DailyStreamInteractionCount },
+            { nameof(DailyFormsActivity), DailyFormsActivity },
+            { nameof(DailyFormsInteractionCount), DailyFormsInteractionCount },
+            { nameof(DailyCopilotActionActivity), DailyCopilotActionActivity },
+            { nameof(DailyCopilotActionCount), DailyCopilotActionCount },
+            { nameof(DailyWebPluginActivity), DailyWebPluginActivity },
+            { nameof(DailyWebPluginInteractions), DailyWebPluginInteractions }
+        };
+    }
 }
