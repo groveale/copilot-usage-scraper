@@ -13,7 +13,7 @@ namespace groveale.Services
 
         Task<List<CopilotReminderItem>> GetUsersForQueue();
 
-        Task UpdateUsersTimeFrameSnapshots(UserActivity dailySnapshots, string timeFrame);
+        Task UpdateUsersTimeFrameSnapshots(UserActivity dailySnapshots, string timeFrame, bool month);
         Task UpdateUserAllTimeSnapshots(UserActivity dailySnapshots);
 
         Task ResetUsersAppStreak(AppType appType, string upn);
@@ -30,8 +30,7 @@ namespace groveale.Services
 
         // For Seeding
         Task SeedDailyActivitiesAsync(List<UserActivity> userActivitiesSeed);
-        Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed);
-        Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed);
+        Task SeedTimeFrameActivitiesAsync(List<TimeFrameUsage> userActivitiesSeed);
         Task SeedAllTimeActivityAsync(List<AllTimeUsage> userActivitiesSeed);
         Task SeedInactiveUsersAsync(List<InactiveUser> inactiveUsersSeed);
 
@@ -217,7 +216,7 @@ namespace groveale.Services
                 }
 
 
-                // We need to update the last weekly, monthly and alltime tables
+                // We need to update the  weekly, monthly and alltime tables
                 await UpdateUserAllTimeSnapshots(userEntity);
 
                 // Update Monthly
@@ -233,7 +232,7 @@ namespace groveale.Services
                 var daysToSubtract = dayOfWeek == 0 ? 6 : dayOfWeek - 1; // Adjust for Sunday
                 var firstMondayOfWeeklySnapshot = date.AddDays(-daysToSubtract).ToString("yyyy-MM-dd");
 
-                await UpdateUsersTimeFrameSnapshots(userEntity, firstMondayOfWeeklySnapshot);
+                await UpdateUsersTimeFrameSnapshots(userEntity, firstMondayOfWeeklySnapshot, false);
 
 
             }
@@ -342,10 +341,15 @@ namespace groveale.Services
                 var existingTableEntity = await _copilotInteractionDailyAggregationTableClient.GetEntityAsync<TableEntity>(reportDate, uPN);
                 return existingTableEntity;
             }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                _logger.LogWarning($"No entity found for UPN: {uPN}, ReportDate: {reportDate}. Returning null.");
+                return null; // Or handle the case as needed
+            }
             catch (RequestFailedException ex)
             {
                 _logger.LogError($"Failed to retrieve entity for UPN: {uPN}, ReportDate: {reportDate}. Error: {ex.Message}");
-                throw; // Re-throw the exception or return a default value if needed
+                throw; // Re-throw the exception for other errors
             }
         }
 
@@ -465,13 +469,22 @@ namespace groveale.Services
             }
         }
 
-        public async Task UpdateUsersTimeFrameSnapshots(UserActivity userActivity, string timeFrame)
+        public async Task UpdateUsersTimeFrameSnapshots(UserActivity userActivity, string timeFrame, bool month = true)
         {
+            // get the table
+
+            var tableClient = _userMonthlyTableClient;
+
+            if (!month)
+            {
+                tableClient = _userWeeklyTableClient;
+            }
+
             
             try
             {
                 // Get the existing entity
-                var existingTableEntity = await _userMonthlyTableClient.GetEntityAsync<TimeFrameUsage>(timeFrame, userActivity.UPN);
+                var existingTableEntity = await tableClient.GetEntityAsync<TimeFrameUsage>(timeFrame, userActivity.UPN);
 
                 // Increment the daily counts
                 existingTableEntity.Value.DailyTeamsActivityCount += userActivity.DailyTeamsActivity ? 1 : 0;
@@ -482,7 +495,7 @@ namespace groveale.Services
                 existingTableEntity.Value.DailyPowerPointActivityCount += userActivity.DailyPowerPointActivity ? 1 : 0;
                 existingTableEntity.Value.DailyOneNoteActivityCount += userActivity.DailyOneNoteActivity ? 1 : 0;
                 existingTableEntity.Value.DailyLoopActivityCount += userActivity.DailyLoopActivity ? 1 : 0;
-                existingTableEntity.Value.DailyAllActivityCount += userActivity.DailyCopilotAllUpActivity ? 1 : 0;
+                existingTableEntity.Value.DailyAllActivityCount += userActivity.DailyAllUpActivity ? 1 : 0;
 
                 // Increment additional activity counts
                 existingTableEntity.Value.DailyMACActivityCount += userActivity.DailyMACActivity ? 1 : 0;
@@ -516,7 +529,7 @@ namespace groveale.Services
                 existingTableEntity.Value.AllInteractionCount += userActivity.DailyAllInteractionCount;
 
                 // Update the entity in the table
-                await _userMonthlyTableClient.UpdateEntityAsync(existingTableEntity.Value, ETag.All, TableUpdateMode.Merge);
+                await tableClient.UpdateEntityAsync(existingTableEntity.Value, ETag.All, TableUpdateMode.Merge);
 
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
@@ -524,7 +537,7 @@ namespace groveale.Services
                 // Entity not found - create new entity
                 var newEntity = new TimeFrameUsage
                 {
-                    StartDate = DateTime.Parse(timeFrame),
+                    StartDate = DateTime.SpecifyKind(DateTime.Parse(timeFrame), DateTimeKind.Utc),
                     UPN = userActivity.UPN,
                     DailyTeamsActivityCount = userActivity.DailyTeamsActivity ? 1 : 0,
                     DailyCopilotChatActivityCount = userActivity.DailyCopilotChatActivity ? 1 : 0,
@@ -534,7 +547,7 @@ namespace groveale.Services
                     DailyPowerPointActivityCount = userActivity.DailyPowerPointActivity ? 1 : 0,
                     DailyOneNoteActivityCount = userActivity.DailyOneNoteActivity ? 1 : 0,
                     DailyLoopActivityCount = userActivity.DailyLoopActivity ? 1 : 0,
-                    DailyAllActivityCount = userActivity.DailyCopilotAllUpActivity ? 1 : 0,
+                    DailyAllActivityCount = userActivity.DailyAllUpActivity ? 1 : 0,
                     DailyMACActivityCount = userActivity.DailyMACActivity ? 1 : 0,
                     DailyDesignerActivityCount = userActivity.DailyDesignerActivity ? 1 : 0,
                     DailySharePointActivityCount = userActivity.DailySharePointActivity ? 1 : 0,
@@ -564,7 +577,7 @@ namespace groveale.Services
                     AllInteractionCount = userActivity.DailyAllInteractionCount
                 };
 
-                await _userMonthlyTableClient.AddEntityAsync(newEntity.ToTableEntity());
+                await tableClient.AddEntityAsync(newEntity.ToTableEntity());
             }
             catch (RequestFailedException ex)
             {
@@ -575,7 +588,7 @@ namespace groveale.Services
         private UserActivity ConvertToUserActivity(M365CopilotUsage user, Response<TableEntity> aggregationEntity)
         {
             // if last activity date is not the same as the report refresh date, everything is false, simly return
-            if (user.LastActivityDate != user.ReportRefreshDate)
+            if (user.LastActivityDate != user.ReportRefreshDate || aggregationEntity == null)
             {
                 return new UserActivity
                 {
@@ -590,7 +603,7 @@ namespace groveale.Services
                     DailyOneNoteActivity = false,
                     DailyLoopActivity = false,
                     DailyCopilotChatActivity = false,
-                    DailyCopilotAllUpActivity = false,
+                    DailyAllUpActivity = false,
                     DailyTeamsInteractionCount = 0,
                     DailyOutlookInteractionCount = 0,
                     DailyWordInteractionCount = 0,
@@ -687,7 +700,7 @@ namespace groveale.Services
                 DailyWebPluginActivity = DailyUsageFromCount(aggregationEntity.Value.GetInt32("WebPluginInteractions").GetValueOrDefault()),
                 DailyWebPluginInteractions = aggregationEntity.Value.GetInt32("WebPluginInteractions").GetValueOrDefault(),
 
-                DailyCopilotAllUpActivity = copilotAllUpActivity
+                DailyAllUpActivity = copilotAllUpActivity
             };
         }
 
@@ -704,7 +717,7 @@ namespace groveale.Services
                 { AppType.OneNote, new Tuple<bool,int>(userActivity.DailyOneNoteActivity, userActivity.DailyOneNoteInteractionCount) },
                 { AppType.Loop, new Tuple<bool,int>(userActivity.DailyLoopActivity, userActivity.DailyLoopInteractionCount) },
                 { AppType.CopilotChat, new Tuple<bool,int>(userActivity.DailyCopilotChatActivity, userActivity.DailyCopilotChatInteractionCount) },
-                { AppType.All, new Tuple<bool,int>(userActivity.DailyCopilotAllUpActivity, userActivity.DailyAllInteractionCount) },
+                { AppType.All, new Tuple<bool,int>(userActivity.DailyAllUpActivity, userActivity.DailyAllInteractionCount) },
                 { AppType.MAC, new Tuple<bool,int>(userActivity.DailyMACActivity, userActivity.DailyMACInteractionCount) },
                 { AppType.Designer, new Tuple<bool,int>(userActivity.DailyDesignerActivity, userActivity.DailyDesignerInteractionCount) },
                 { AppType.SharePoint, new Tuple<bool,int>(userActivity.DailySharePointActivity, userActivity.DailySharePointInteractionCount) },
@@ -878,103 +891,39 @@ namespace groveale.Services
             // Get daily table
             foreach (var userEntity in userActivitiesSeed)
             {
-                // Add user record
-                var tableEntity = new TableEntity(userEntity.ReportDate.ToString("yyyy-MM-dd"), userEntity.UPN)
-                {
-                    { "ReportDate", userEntity.ReportDate },
-                    { "DisplayName", userEntity.DisplayName },
-                    { "DailyTeamsActivity", userEntity.DailyTeamsActivity },
-                    { "DailyOutlookActivity", userEntity.DailyOutlookActivity },
-                    { "DailyWordActivity", userEntity.DailyWordActivity },
-                    { "DailyExcelActivity", userEntity.DailyExcelActivity },
-                    { "DailyPowerPointActivity", userEntity.DailyPowerPointActivity },
-                    { "DailyOneNoteActivity", userEntity.DailyOneNoteActivity },
-                    { "DailyLoopActivity", userEntity.DailyLoopActivity },
-                    { "DailyCopilotChatActivity", userEntity.DailyCopilotChatActivity },
-                    { "DailyAllActivity", userEntity.DailyCopilotAllUpActivity },
-
-                };
+                // Add user recor
 
                 try
                 {
                     // Try to add the entity if it doesn't exist
-                    await _userDAUTableClient.AddEntityAsync(tableEntity);
+                    await _userDAUTableClient.AddEntityAsync(userEntity.ToTableEntity());
                     _logger.LogInformation($"Added daily seed entity for {userEntity.UPN}");
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
                 {
                     // Merge the entity if it already exists
-                    await _userDAUTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                    await _userDAUTableClient.UpdateEntityAsync(userEntity.ToTableEntity(), ETag.All, TableUpdateMode.Merge);
                 }
             }
 
         }
 
-        public async Task SeedWeeklyActivitiesAsync(List<WeeklyUsage> userActivitiesSeed)
-        {
-            foreach (var userEntity in userActivitiesSeed)
-            {
-                // Add user record
-                var tableEntity = new TableEntity(userEntity.StartDate.ToString("yyyy-MM-dd"), userEntity.UPN)
-                {
-                    { "StartDate", userEntity.StartDate },
-                    { "DisplayName", userEntity.DisplayName },
-                    { "DailyTeamsActivityCount", userEntity.DailyTeamsActivityCount },
-                    { "DailyOutlookActivityCount", userEntity.DailyOutlookActivityCount },
-                    { "DailyWordActivityCount", userEntity.DailyWordActivityCount },
-                    { "DailyExcelActivityCount", userEntity.DailyExcelActivityCount },
-                    { "DailyPowerPointActivityCount", userEntity.DailyPowerPointActivityCount },
-                    { "DailyOneNoteActivityCount", userEntity.DailyOneNoteActivityCount },
-                    { "DailyLoopActivityCount", userEntity.DailyLoopActivityCount },
-                    { "DailyCopilotChatActivityCount", userEntity.DailyCopilotChatActivityCount },
-                    { "DailyAllActivityCount", userEntity.DailyAllActivityCount }
-                };
 
-                try
-                {
-                    // Try to add the entity if it doesn't exist
-                    await _userWeeklyTableClient.AddEntityAsync(tableEntity);
-                    _logger.LogInformation($"Added weekly seed entity for {userEntity.UPN}");
-                }
-                catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
-                {
-                    // Merge the entity if it already exists
-                    await _userWeeklyTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
-                }
-            }
-        }
-
-        public async Task SeedMonthlyActivitiesAsync(List<MonthlyUsage> userActivitiesSeed)
+        public async Task SeedTimeFrameActivitiesAsync(List<TimeFrameUsage> userActivitiesSeed)
         {
             // Get daily table
             foreach (var userEntity in userActivitiesSeed)
             {
-                // Add user record
-                var tableEntity = new TableEntity(userEntity.StartDate.ToString("yyyy-MM-dd"), userEntity.UPN)
-                {
-                    { "StartDate", userEntity.StartDate },
-                    { "DisplayName", userEntity.DisplayName },
-                    { "DailyTeamsActivityCount", userEntity.DailyTeamsActivityCount },
-                    { "DailyOutlookActivityCount", userEntity.DailyOutlookActivityCount },
-                    { "DailyWordActivityCount", userEntity.DailyWordActivityCount },
-                    { "DailyExcelActivityCount", userEntity.DailyExcelActivityCount },
-                    { "DailyPowerPointActivityCount", userEntity.DailyPowerPointActivityCount },
-                    { "DailyOneNoteActivityCount", userEntity.DailyOneNoteActivityCount },
-                    { "DailyLoopActivityCount", userEntity.DailyLoopActivityCount },
-                    { "DailyCopilotChatActivityCount", userEntity.DailyCopilotChatActivityCount },
-                    { "DailyAllActivityCount", userEntity.DailyAllActivityCount }
-                };
-
                 try
                 {
                     // Try to add the entity if it doesn't exist
-                    await _userMonthlyTableClient.AddEntityAsync(tableEntity);
-                    _logger.LogInformation($"Added monthly seed entity for {userEntity.UPN}");
+                    await _userMonthlyTableClient.AddEntityAsync(userEntity.ToTableEntity());
+                    _logger.LogInformation($"Added time-frame seed entity for {userEntity.UPN}");
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
                 {
                     // Merge the entity if it already exists
-                    await _userMonthlyTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                    await _userMonthlyTableClient.UpdateEntityAsync(userEntity, ETag.All, TableUpdateMode.Merge);
                 }
             }
         }
@@ -984,25 +933,16 @@ namespace groveale.Services
             // Get daily table
             foreach (var userEntity in userActivitiesSeed)
             {
-                // Add user record
-                var tableEntity = new TableEntity(userEntity.UPN, userEntity.App.ToString())
-                {
-                    { "DisplayName", userEntity.DisplayName },
-                    { "DailyAllTimeActivityCount", userEntity.DailyAllTimeActivityCount },
-                    { "CurrentDailyStreak", userEntity.CurrentDailyStreak },
-                    { "BestDailyStreak", userEntity.BestDailyStreak }
-                };
-
                 try
                 {
                     // Try to add the entity if it doesn't exist
-                    await _userAllTimeTableClient.AddEntityAsync(tableEntity);
+                    await _userAllTimeTableClient.AddEntityAsync(userEntity.ToTableEntity());
                     _logger.LogInformation($"Added alltime seed entity for {userEntity.UPN}");
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
                 {
                     // Merge the entity if it already exists
-                    await _userAllTimeTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
+                    await _userAllTimeTableClient.UpdateEntityAsync(userEntity.ToTableEntity(), ETag.All, TableUpdateMode.Merge);
                 }
             }
         }

@@ -21,7 +21,8 @@ public class AllTimeUsage : BaseTableEntity
         {
             { nameof(DailyAllTimeActivityCount), DailyAllTimeActivityCount },
             { nameof(CurrentDailyStreak), CurrentDailyStreak },
-            { nameof(BestDailyStreak), BestDailyStreak }
+            { nameof(BestDailyStreak), BestDailyStreak },
+            { nameof(AllTimeInteractionCount), AllTimeInteractionCount }
         };
     }
 

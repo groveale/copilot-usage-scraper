@@ -56,6 +56,7 @@ public class TimeFrameUsage : BaseTableEntity
 
         return new TableEntity(PartitionKey, RowKey)
         {
+            { nameof (StartDate), DateTime.SpecifyKind (StartDate, DateTimeKind.Utc)},
             { nameof(DailyAllActivityCount), DailyAllActivityCount },
             { nameof(DailyTeamsActivityCount), DailyTeamsActivityCount },
             { nameof(DailyCopilotChatActivityCount), DailyCopilotChatActivityCount },

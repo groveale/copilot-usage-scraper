@@ -46,17 +46,45 @@ namespace groveale.Services
                     UPN = upn,
                     DisplayName = displayName,
                     DailyTeamsActivity = random.Next(2) == 1,
+                    DailyTeamsInteractionCount = random.Next(50),
                     DailyCopilotChatActivity = random.Next(2) == 1,
+                    DailyCopilotChatInteractionCount = random.Next(50),
                     DailyOutlookActivity = random.Next(2) == 1,
+                    DailyOutlookInteractionCount = random.Next(50),
                     DailyWordActivity = random.Next(2) == 1,
+                    DailyWordInteractionCount = random.Next(50),
                     DailyExcelActivity = random.Next(2) == 1,
+                    DailyExcelInteractionCount = random.Next(50),
                     DailyPowerPointActivity = random.Next(2) == 1,
+                    DailyPowerPointInteractionCount = random.Next(50),
                     DailyOneNoteActivity = random.Next(2) == 1,
-                    DailyLoopActivity = random.Next(2) == 1
+                    DailyOneNoteInteractionCount = random.Next(50),
+                    DailyLoopActivity = random.Next(2) == 1,
+                    DailyLoopInteractionCount = random.Next(50),
+                    DailyAllUpActivity = random.Next(2) == 1,
+                    DailyAllInteractionCount = random.Next(50),
+                    DailyMACActivity = random.Next(2) == 1,
+                    DailyMACInteractionCount = random.Next(50),
+                    DailyDesignerActivity = random.Next(2) == 1,
+                    DailyDesignerInteractionCount = random.Next(50),
+                    DailySharePointActivity = random.Next(2) == 1,
+                    DailySharePointInteractionCount = random.Next(50),
+                    DailyPlannerActivity = random.Next(2) == 1,
+                    DailyPlannerInteractionCount = random.Next(50),
+                    DailyWhiteboardActivity = random.Next(2) == 1,
+                    DailyWhiteboardInteractionCount = random.Next(50),
+                    DailyStreamActivity = random.Next(2) == 1,
+                    DailyStreamInteractionCount = random.Next(50),
+                    DailyFormsActivity = random.Next(2) == 1,
+                    DailyFormsInteractionCount = random.Next(50),
+                    DailyCopilotActionActivity = random.Next(2) == 1,
+                    DailyCopilotActionCount = random.Next(50),
+                    DailyWebPluginActivity = random.Next(2) == 1,
+                    DailyWebPluginInteractions = random.Next(50)
                 };
 
                 // Calculate DailyCopilotAllUpActivity if any of the other activities are true
-                activity.DailyCopilotAllUpActivity = activity.DailyTeamsActivity || activity.DailyCopilotChatActivity || activity.DailyOutlookActivity || activity.DailyWordActivity || activity.DailyExcelActivity || activity.DailyPowerPointActivity || activity.DailyOneNoteActivity || activity.DailyLoopActivity;
+                activity.DailyAllUpActivity = activity.DailyTeamsActivity || activity.DailyCopilotChatActivity || activity.DailyOutlookActivity || activity.DailyWordActivity || activity.DailyExcelActivity || activity.DailyPowerPointActivity || activity.DailyOneNoteActivity || activity.DailyLoopActivity;
 
                 activities.Add(activity);
             }
@@ -75,16 +103,16 @@ namespace groveale.Services
 
             // Get all users
             var random = new Random();
-            var activities = new List<MonthlyUsage>();
+            var activities = new List<TimeFrameUsage>();
 
             foreach (var (upn, displayName) in users)
             {
                 // Create a simple activity entry with random boolean values
-                var activity = new MonthlyUsage
+                var activity = new TimeFrameUsage
                 {
                     StartDate = DateTime.UtcNow.Date.AddDays(-1 * DateTime.UtcNow.Date.Day + 1),
                     UPN = upn,
-                    DisplayName = displayName,
+                    DailyAllActivityCount = random.Next(20),
                     DailyTeamsActivityCount = random.Next(20),
                     DailyCopilotChatActivityCount = random.Next(20),
                     DailyOutlookActivityCount = random.Next(20),
@@ -92,16 +120,44 @@ namespace groveale.Services
                     DailyExcelActivityCount = random.Next(20),
                     DailyPowerPointActivityCount = random.Next(20),
                     DailyOneNoteActivityCount = random.Next(20),
-                    DailyLoopActivityCount = random.Next(20)
+                    DailyLoopActivityCount = random.Next(20),
+                    DailyMACActivityCount = random.Next(20),
+                    DailyDesignerActivityCount = random.Next(20),
+                    DailySharePointActivityCount = random.Next(20),
+                    DailyPlannerActivityCount = random.Next(20),
+                    DailyWhiteboardActivityCount = random.Next(20),
+                    DailyStreamActivityCount = random.Next(20),
+                    DailyFormsActivityCount = random.Next(20),
+                    DailyCopilotActionActivityCount = random.Next(20),
+                    DailyWebPluginActivityCount = random.Next(20),
+                    TeamsInteractionCount = random.Next(200),
+                    CopilotChatInteractionCount = random.Next(200),
+                    OutlookInteractionCount = random.Next(200),
+                    WordInteractionCount = random.Next(200),
+                    ExcelInteractionCount = random.Next(200),
+                    PowerPointInteractionCount = random.Next(200),
+                    OneNoteInteractionCount = random.Next(200),
+                    LoopInteractionCount = random.Next(200),
+                    MACInteractionCount = random.Next(200),
+                    DesignerInteractionCount = random.Next(200),
+                    SharePointInteractionCount = random.Next(200),
+                    PlannerInteractionCount = random.Next(200),
+                    WhiteboardInteractionCount = random.Next(200),
+                    StreamInteractionCount = random.Next(200),
+                    FormsInteractionCount = random.Next(200),
+                    CopilotActionInteractionCount = random.Next(200),
+                    WebPluginInteractionCount = random.Next(200)
                 };
 
                 // Calculate DailyCopilotAllUpActivity, heightest of the other activities
                 activity.DailyAllActivityCount = Math.Max(activity.DailyTeamsActivityCount, Math.Max(activity.DailyCopilotChatActivityCount, Math.Max(activity.DailyOutlookActivityCount, Math.Max(activity.DailyWordActivityCount, Math.Max(activity.DailyExcelActivityCount, Math.Max(activity.DailyPowerPointActivityCount, Math.Max(activity.DailyOneNoteActivityCount, activity.DailyLoopActivityCount)))))));
+                activity.AllInteractionCount = activity.TeamsInteractionCount + activity.CopilotChatInteractionCount + activity.OutlookInteractionCount + activity.WordInteractionCount + activity.ExcelInteractionCount + activity.PowerPointInteractionCount + activity.OneNoteInteractionCount + activity.LoopInteractionCount + activity.MACInteractionCount + activity.DesignerInteractionCount + activity.SharePointInteractionCount + activity.PlannerInteractionCount + activity.WhiteboardInteractionCount + activity.StreamInteractionCount + activity.FormsInteractionCount + activity.CopilotActionInteractionCount + activity.WebPluginInteractionCount;
+
                 activities.Add(activity);
             }
 
             // Save user activities
-            await _storageSnapshotService.SeedMonthlyActivitiesAsync(activities);
+            await _storageSnapshotService.SeedTimeFrameActivitiesAsync(activities);
 
             _logger.LogInformation("Seeding monthly activities for tenant {tenantId} completed.", tenantId);
         }
@@ -114,7 +170,7 @@ namespace groveale.Services
 
             // Get all users
             var random = new Random();
-            var activities = new List<WeeklyUsage>();
+            var activities = new List<TimeFrameUsage>();
 
             // Get the Monday of the current week
             var dayOfWeek = (int)DateTime.UtcNow.Date.DayOfWeek;
@@ -124,11 +180,11 @@ namespace groveale.Services
             foreach (var (upn, displayName) in users)
             {
                 // Create a simple activity entry with random boolean values
-                var activity = new WeeklyUsage
+                var activity = new TimeFrameUsage
                 {
                     StartDate = monday,
                     UPN = upn,
-                    DisplayName = displayName,
+                    DailyAllActivityCount = random.Next(5),
                     DailyTeamsActivityCount = random.Next(5),
                     DailyCopilotChatActivityCount = random.Next(5),
                     DailyOutlookActivityCount = random.Next(5),
@@ -136,21 +192,48 @@ namespace groveale.Services
                     DailyExcelActivityCount = random.Next(5),
                     DailyPowerPointActivityCount = random.Next(5),
                     DailyOneNoteActivityCount = random.Next(5),
-                    DailyLoopActivityCount = random.Next(5)
-                    
+                    DailyLoopActivityCount = random.Next(5),
+                    DailyMACActivityCount = random.Next(5),
+                    DailyDesignerActivityCount = random.Next(5),
+                    DailySharePointActivityCount = random.Next(5),
+                    DailyPlannerActivityCount = random.Next(5),
+                    DailyWhiteboardActivityCount = random.Next(5),
+                    DailyStreamActivityCount = random.Next(5),
+                    DailyFormsActivityCount = random.Next(5),
+                    DailyCopilotActionActivityCount = random.Next(5),
+                    DailyWebPluginActivityCount = random.Next(5),
+                    TeamsInteractionCount = random.Next(50),
+                    CopilotChatInteractionCount = random.Next(50),
+                    OutlookInteractionCount = random.Next(50),
+                    WordInteractionCount = random.Next(50),
+                    ExcelInteractionCount = random.Next(50),
+                    PowerPointInteractionCount = random.Next(50),
+                    OneNoteInteractionCount = random.Next(50),
+                    LoopInteractionCount = random.Next(50),
+                    MACInteractionCount = random.Next(50),
+                    DesignerInteractionCount = random.Next(50),
+                    SharePointInteractionCount = random.Next(50),
+                    PlannerInteractionCount = random.Next(50),
+                    WhiteboardInteractionCount = random.Next(50),
+                    StreamInteractionCount = random.Next(50),
+                    FormsInteractionCount = random.Next(50),
+                    CopilotActionInteractionCount = random.Next(50),
+                    WebPluginInteractionCount = random.Next(50),
+                    AllInteractionCount = random.Next(50)
                 };
 
-                // Calculate DailyCopilotAllUpActivity, heightest of the other activities
                 activity.DailyAllActivityCount = Math.Max(activity.DailyTeamsActivityCount, Math.Max(activity.DailyCopilotChatActivityCount, Math.Max(activity.DailyOutlookActivityCount, Math.Max(activity.DailyWordActivityCount, Math.Max(activity.DailyExcelActivityCount, Math.Max(activity.DailyPowerPointActivityCount, Math.Max(activity.DailyOneNoteActivityCount, activity.DailyLoopActivityCount)))))));
+                // sum all the interaction counts
+                activity.AllInteractionCount = activity.TeamsInteractionCount + activity.CopilotChatInteractionCount + activity.OutlookInteractionCount + activity.WordInteractionCount + activity.ExcelInteractionCount + activity.PowerPointInteractionCount + activity.OneNoteInteractionCount + activity.LoopInteractionCount + activity.MACInteractionCount + activity.DesignerInteractionCount + activity.SharePointInteractionCount + activity.PlannerInteractionCount + activity.WhiteboardInteractionCount + activity.StreamInteractionCount + activity.FormsInteractionCount + activity.CopilotActionInteractionCount + activity.WebPluginInteractionCount;
+
                 activities.Add(activity);
             }
 
             // Save user activities
-            await _storageSnapshotService.SeedWeeklyActivitiesAsync(activities);
+            await _storageSnapshotService.SeedTimeFrameActivitiesAsync(activities);
 
             _logger.LogInformation("Seeding weekly activities for tenant {tenantId} completed.", tenantId);
         }
-
 
         public async Task SeedAllTimeActivityAsync(string tenantId)
         {
@@ -170,12 +253,10 @@ namespace groveale.Services
                     var activity = new AllTimeUsage
                     {
                         UPN = upn,
-                        DisplayName = displayName,
                         App = app,
                         DailyAllTimeActivityCount = random.Next(100),
                         BestDailyStreak = random.Next(30),
-                        CurrentDailyStreak = random.Next(30),
-
+                        CurrentDailyStreak = random.Next(30)
                     };
 
                     // add

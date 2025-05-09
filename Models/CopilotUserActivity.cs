@@ -31,7 +31,7 @@ public class UserActivity : BaseTableEntity
     public bool DailyLoopActivity { get; set; }
     public int DailyLoopInteractionCount { get; set; }
 
-    public bool DailyCopilotAllUpActivity { get; set; }
+    public bool DailyAllUpActivity { get; set; }
     public int DailyAllInteractionCount { get; set; }
 
     // Additional interaction counts with corresponding bools
@@ -70,6 +70,7 @@ public class UserActivity : BaseTableEntity
 
         return new TableEntity(PartitionKey, RowKey)
         {
+            { nameof(ReportDate), DateTime.SpecifyKind (ReportDate, DateTimeKind.Utc) },
             { nameof(DisplayName), DisplayName },
             { nameof(DailyTeamsActivity), DailyTeamsActivity },
             { nameof(DailyTeamsInteractionCount), DailyTeamsInteractionCount },
@@ -87,7 +88,7 @@ public class UserActivity : BaseTableEntity
             { nameof(DailyOneNoteInteractionCount), DailyOneNoteInteractionCount },
             { nameof(DailyLoopActivity), DailyLoopActivity },
             { nameof(DailyLoopInteractionCount), DailyLoopInteractionCount },
-            { nameof(DailyCopilotAllUpActivity), DailyCopilotAllUpActivity },
+            { nameof(DailyAllUpActivity), DailyAllUpActivity },
             { nameof(DailyAllInteractionCount), DailyAllInteractionCount },
             { nameof(DailyMACActivity), DailyMACActivity },
             { nameof(DailyMACInteractionCount), DailyMACInteractionCount },
