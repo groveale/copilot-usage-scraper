@@ -59,12 +59,20 @@ namespace groverale
                 await _graphService.SetReportAnonSettingsAsync(true);
             }
 
-            // Remove snapshot for non-copilot users
-            var copilotUsageData = RemoveNonCopilotUsers(usageData, copilotUsers);
+            // Remove snapshot for non-copilot users and offline users
+            // Offline users have no activity in either Teams or Outlook for the day - Considered Out of Office so are skipped to allow streaks to continue
+            var copilotUsageData = RemoveNonCopilotUsersAndOfflineUsers(usageData, copilotUsers);
             _logger.LogInformation($"copilot users usage data: {copilotUsageData.Count}");
 
             try
             {
+                // Process the usage data
+                if (copilotUsageData.Count == 0)
+                {
+                    _logger.LogInformation("No usage data to process.");
+                    return;
+                }
+
                 var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(copilotUsageData);
                 _logger.LogInformation($"Records added: {recordsAdded}");
             }
@@ -75,7 +83,7 @@ namespace groverale
  
         }
 
-        private List<M365CopilotUsage> RemoveNonCopilotUsers(List<M365CopilotUsage> usageData, Dictionary<string, bool> copilotUsers)
+        private List<M365CopilotUsage> RemoveNonCopilotUsersAndOfflineUsers(List<M365CopilotUsage> usageData, Dictionary<string, bool> copilotUsers)
         {
             var filteredUsageData = new List<M365CopilotUsage>();
 

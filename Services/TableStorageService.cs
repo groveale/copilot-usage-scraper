@@ -155,10 +155,11 @@ namespace groveale.Services
             // Tuple to store the user's last activity date and username
             var lastActivityDates = new List<(string, string, string, string)>();
 
-            string reportRefreshDateString = userSnapshots[0].ReportRefreshDate;
+            string reportRefreshDateString = string.Empty;
 
             foreach (var userSnap in userSnapshots)
             {
+                reportRefreshDateString = userSnap.ReportRefreshDate;   
                 // if last activity date is not the same as the report refresh date, we need to validate how long usage has not occured
                 // there is no daily activity if the last activity date is not the same as the report refresh date
 
@@ -198,7 +199,7 @@ namespace groveale.Services
 
                 // if getting audit data we should get the aggregation data for the user
                 // Get the aggregation entity
-                var aggregationEntity = await GetDailyAuditDataForUser(userSnap.UserPrincipalName, userSnap.ReportRefreshDate);
+                var aggregationEntity = await GetDailyAuditDataForUser(userSnap.UserPrincipalName, userSnap.ReportRefreshDate);               
 
                 var userEntity = ConvertToUserActivity(userSnap, aggregationEntity);
 
@@ -307,26 +308,6 @@ namespace groveale.Services
                         await _userLastUsageTableClient.UpdateEntityAsync(tableEntity, ETag.All, TableUpdateMode.Merge);
                     }
                 }
-            }
-
-            var reportRfreshDate = userSnapshots[0].ReportRefreshDate;
-
-            // Find all records with report refresh date note equal to current and delete
-            // Clear out users who have had activity since we last reminded them
-            string filter = $"ReportRefreshDate ne '{reportRfreshDate}'";
-            var queryResults = _userLastUsageTableClient.QueryAsync<TableEntity>(filter);
-
-            try
-            {
-                // Query all records with filter
-                await foreach (TableEntity entity in queryResults)
-                {
-                    await _userLastUsageTableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
-                }
-            }
-            catch (RequestFailedException ex)
-            {
-                Console.WriteLine($"Error deleting records: {ex.Message}");
             }
 
             return DAUadded;
@@ -587,8 +568,8 @@ namespace groveale.Services
 
         private UserActivity ConvertToUserActivity(M365CopilotUsage user, Response<TableEntity> aggregationEntity)
         {
-            // if last activity date is not the same as the report refresh date, everything is false, simly return
-            if (user.LastActivityDate != user.ReportRefreshDate || aggregationEntity == null)
+            // if no aggregation entity, we have no usage
+            if (aggregationEntity == null)
             {
                 return new UserActivity
                 {

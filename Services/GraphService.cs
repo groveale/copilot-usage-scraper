@@ -94,7 +94,16 @@ namespace groveale.Services
                 // find all the user that have a copilot license. let's use lynq to filter the users
                 activeUsers.Where(usr => usr.AssignedProducts.Contains("MICROSOFT 365 COPILOT")).ToList().ForEach(usr =>
                 {
-                    copilotUsers.Add(usr.UserPrincipalName, true);
+                    // Check if user has activity in Teams, Outlook or SharePoint
+                    if (usr.TeamsLastActivityDate.GetValueOrDefault().DateTime == usr.ReportRefreshDate.GetValueOrDefault().DateTime ||
+                        usr.ExchangeLastActivityDate.GetValueOrDefault().DateTime  == usr.ReportRefreshDate.GetValueOrDefault().DateTime  ||
+                        usr.SharePointLastActivityDate.GetValueOrDefault().DateTime  == usr.ReportRefreshDate.GetValueOrDefault().DateTime )
+                    {
+                        // Add the user to the list
+                        copilotUsers.Add(usr.UserPrincipalName, true);
+                    }
+
+                    // if no usage they are considered offline and not processed (should reduce weekend overhead processing)
                 });
 
                 return copilotUsers;
