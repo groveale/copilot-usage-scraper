@@ -11,9 +11,13 @@ namespace groveale
     {
         private readonly ILogger<SeedTestData> _logger;
         private readonly IUserActivitySeeder _userActivitySeeder;
+        private readonly ISettingsService _settingsService;
+        private readonly IKeyVaultService _keyVaultService;
 
-        public SeedTestData(ILogger<SeedTestData> logger, IUserActivitySeeder userActivitySeeder)
+        public SeedTestData(ILogger<SeedTestData> logger, IUserActivitySeeder userActivitySeeder, ISettingsService settingsService, IKeyVaultService keyVaultService)
         {
+            _settingsService = settingsService;
+            _keyVaultService = keyVaultService;
             _logger = logger;
             _userActivitySeeder = userActivitySeeder;
         }
@@ -35,16 +39,19 @@ namespace groveale
             {
                 return new BadRequestObjectResult("Please pass a tenantId on the query string or in the request body");
             }
+            
+            // Create Encyption Service
+            var encryptionService = await DeterministicEncryptionService.CreateAsync(_settingsService, _keyVaultService);
 
             try
             {
                 // Seed daily activities for a tenant
-                await _userActivitySeeder.SeedDailyActivitiesAsync(tenantId);
-                await _userActivitySeeder.SeedWeeklyActivitiesAsync(tenantId);
-                await _userActivitySeeder.SeedMonthlyActivitiesAsync(tenantId);
-                await _userActivitySeeder.SeedAllTimeActivityAsync(tenantId);
-                await _userActivitySeeder.SeedInactiveUsersAsync(tenantId);
-                
+                await _userActivitySeeder.SeedDailyActivitiesAsync(tenantId, encryptionService);
+                await _userActivitySeeder.SeedWeeklyActivitiesAsync(tenantId, encryptionService);
+                await _userActivitySeeder.SeedMonthlyActivitiesAsync(tenantId, encryptionService);
+                await _userActivitySeeder.SeedAllTimeActivityAsync(tenantId, encryptionService);
+                await _userActivitySeeder.SeedInactiveUsersAsync(tenantId, encryptionService);
+
             }
             catch (Exception ex)
             {

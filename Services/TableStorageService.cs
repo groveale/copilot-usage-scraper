@@ -28,7 +28,8 @@ namespace groveale.Services
 
         // For Seeding
         Task SeedDailyActivitiesAsync(List<UserActivity> userActivitiesSeed);
-        Task SeedTimeFrameActivitiesAsync(List<TimeFrameUsage> userActivitiesSeed);
+        Task SeedMonthlyFrameActivitiesAsync(List<CopilotTimeFrameUsage> userActivitiesSeed, string startDate);
+        Task SeedWeeklyTimeFrameActivitiesAsync(List<CopilotTimeFrameUsage> userActivitiesSeed, string startDate);
         Task SeedAllTimeActivityAsync(List<CopilotTimeFrameUsage> userActivitiesSeed);
         Task SeedInactiveUsersAsync(List<InactiveUser> inactiveUsersSeed);
 
@@ -55,13 +56,13 @@ namespace groveale.Services
         private readonly bool CDXTenant = System.Environment.GetEnvironmentVariable("CDXTenant") == "true";
         private readonly string _userDAUTableName = "CopilotUsageDailySnapshots";
         private readonly string _userLastUsageTableName = "UsersLastUsageTracker";
-        private readonly string _userWeeklyTableName = "CopilotUsageWeeklySnapshots";
+        private readonly string _userWeeklyTableName = "CopilotUsageWeeklySnapshots1";
         private readonly string _agentWeeklyTableName = "AgentUsageWeeklySnapshots";
         private readonly string _agentWeeklyByUserTableName = "AgentUsageWeeklyByUserSnapshots";
-        private readonly string _userMonthlyTableName = "CopilotUsageMonthlySnapshots";
+        private readonly string _userMonthlyTableName = "CopilotUsageMonthlySnapshots1";
         private readonly string _agentMonthlyTableName = "AgentUsageMonthlySnapshots";
         private readonly string _agentMonthlyByUserTableName = "AgentUsageMonthlyByUserSnapshots";
-        private readonly string _userAllTimeTableName = "CopilotUsageAllTimeRecord";
+        private readonly string _userAllTimeTableName = "CopilotUsageAllTimeRecord1";
         private readonly string _agentAllTimeTableName = "AgentUsageAllTimeRecord";
         private readonly string _agentAllTimeByUserTableName = "AgentUsageAllTimeByUserRecord";
         private readonly string _reportRefreshDateTableName = "ReportRefreshRecord";
@@ -221,13 +222,6 @@ namespace groveale.Services
                         }
                     }
 
-                    // Todo: Reset alltime snapshots
-                    // Check if ReportRefreshDate is not a weekend
-                    if (reportRefreshDate.DayOfWeek != DayOfWeek.Saturday && reportRefreshDate.DayOfWeek != DayOfWeek.Sunday)
-                    {
-                        // reset streaks for all app as no daily usage
-                    }
-
                 }
 
                 // Encrypt the UPN - lookup is already encrypted
@@ -239,6 +233,8 @@ namespace groveale.Services
 
                 var userEntity = ConvertToUserActivity(userSnap, aggregationEntity);
 
+                // Get User Activity
+                // Todo, store the more precise data in the table
                 var userActivityDictionary = ConvertToUsageDictionary(userEntity);
 
 
@@ -259,20 +255,23 @@ namespace groveale.Services
                 var dailyAgentData = await GetDailyAgentDataForUser(userEntity.UPN, userEntity.ReportDate.ToString("yyyy-MM-dd"));
 
 
+            
+
+
                 // We need to update the  weekly, monthly and alltime tables
-                await UpdateUserSnapshots(userEntity, "alltime", userEntity.ReportDate.ToString("yyyy-MM-dd"));
+                await UpdateUserSnapshots(userActivityDictionary, userEntity.UPN, "alltime", userEntity.ReportDate.ToString("yyyy-MM-dd"));
                 await UpdateAgentSnapshots(dailyAgentData, "alltime", userEntity.UPN, userEntity.ReportDate.ToString("yyyy-MM-dd"));
 
                 // Update Monthly
                 var firstOfMonthForSnapshot = GetMonthStartDate(userEntity.ReportDate);
 
-                await UpdateUserSnapshots(userEntity, "monthly", firstOfMonthForSnapshot);
+                await UpdateUserSnapshots(userActivityDictionary, userEntity.UPN, "monthly", firstOfMonthForSnapshot);
                 await UpdateAgentSnapshots(dailyAgentData, "monthly", userEntity.UPN, firstOfMonthForSnapshot);
 
                 // Update Weekly - Get our timeFrame
                 var firstMondayOfWeeklySnapshot = GetWeekStartDate(userEntity.ReportDate);
 
-                await UpdateUserSnapshots(userEntity, firstMondayOfWeeklySnapshot, firstMondayOfWeeklySnapshot);
+                await UpdateUserSnapshots(userActivityDictionary, userEntity.UPN, firstMondayOfWeeklySnapshot, firstMondayOfWeeklySnapshot);
                 await UpdateAgentSnapshots(dailyAgentData, "monthly", userEntity.UPN, firstMondayOfWeeklySnapshot);
 
             }
@@ -476,12 +475,12 @@ namespace groveale.Services
                 int interactionCount = agentDailyInteractions.TotalInteractionCount;
 
                 // At this point row key is the agentId
-                partitionKey += $"-{agentDailyInteractions.RowKey}";
+                var agentPartitionKey = $"{partitionKey}-{agentDailyInteractions.RowKey}";
 
                 try
                 {
                     // first Update the users all time usage of the agent - 
-                    var existingTableEntity = await tableClientByUser.GetEntityAsync<AgentInteraction>(partitionKey, upn);
+                    var existingTableEntity = await tableClientByUser.GetEntityAsync<AgentInteraction>(agentPartitionKey, upn);
 
                     // Increment the daily all time activity count
                     existingTableEntity.Value.TotalDailyActivityCount = existingTableEntity.Value.TotalDailyActivityCount + 1;
@@ -519,25 +518,22 @@ namespace groveale.Services
                 }
             }
         }
-        private async Task UpdateUserSnapshots(UserActivity userActivity, string timeFrame, string startDate)
+        private async Task UpdateUserSnapshots(Dictionary<AppType, Tuple<bool, int>> userActivityDictionary, string upn, string timeFrame, string startDate)
         {
             // get the table
             var tableClient = _userAllTimeTableClient;
-            string partitionKey = $"{CopilotTimeFrameUsage.AllTimePartitionKeyPrefix}-{userActivity.UPN}";
+            string partitionKey = $"{CopilotTimeFrameUsage.AllTimePartitionKeyPrefix}-{upn}";
 
             if (timeFrame == "weekly")
             {
                 tableClient = _userWeeklyTableClient;
-                partitionKey = $"{startDate}-{userActivity.UPN}";
+                partitionKey = $"{startDate}-{upn}";
             }
             else if (timeFrame == "monthly")
             {
                 tableClient = _userMonthlyTableClient;
-                partitionKey = $"{startDate}-{userActivity.UPN}";
+                partitionKey = $"{startDate}-{upn}";
             }
-
-            // Get User Activity
-            var userActivityDictionary = ConvertToUsageDictionary(userActivity);
 
             foreach (var (app, tuple) in userActivityDictionary)
             {
@@ -575,7 +571,7 @@ namespace groveale.Services
                     {
                         var newAllTimeUsage = new CopilotTimeFrameUsage()
                         {
-                            UPN = userActivity.UPN,
+                            UPN = upn,
                             App = app,
                             TotalDailyActivityCount = 1,
                             TotalInteractionCount = interactionCount,
@@ -944,7 +940,7 @@ namespace groveale.Services
         }
 
 
-        public async Task SeedTimeFrameActivitiesAsync(List<TimeFrameUsage> userActivitiesSeed)
+        public async Task SeedMonthlyFrameActivitiesAsync(List<CopilotTimeFrameUsage> userActivitiesSeed, string startDate)
         {
             // Get daily table
             foreach (var userEntity in userActivitiesSeed)
@@ -952,13 +948,32 @@ namespace groveale.Services
                 try
                 {
                     // Try to add the entity if it doesn't exist
-                    await _userMonthlyTableClient.AddEntityAsync(userEntity.ToTableEntity());
-                    _logger.LogInformation($"Added time-frame seed entity for {userEntity.UPN}");
+                    await _userMonthlyTableClient.AddEntityAsync(userEntity.ToTimeFrameTableEntity(startDate));
+                    _logger.LogInformation($"Added monthly seed entity for {userEntity.UPN}");
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
                 {
                     // Merge the entity if it already exists
-                    await _userMonthlyTableClient.UpdateEntityAsync(userEntity, ETag.All, TableUpdateMode.Merge);
+                    await _userMonthlyTableClient.UpdateEntityAsync(userEntity.ToTimeFrameTableEntity(startDate), ETag.All, TableUpdateMode.Merge);
+                }
+            }
+        }
+
+        public async Task SeedWeeklyTimeFrameActivitiesAsync(List<CopilotTimeFrameUsage> userActivitiesSeed, string startDate)
+        {
+            // Get daily table
+            foreach (var userEntity in userActivitiesSeed)
+            {
+                try
+                {
+                    // Try to add the entity if it doesn't exist
+                    await _userWeeklyTableClient.AddEntityAsync(userEntity.ToTimeFrameTableEntity(startDate));
+                    _logger.LogInformation($"Added weekly seed entity for {userEntity.UPN}");
+                }
+                catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict indicates the entity already exists
+                {
+                    // Merge the entity if it already exists
+                    await _userWeeklyTableClient.UpdateEntityAsync(userEntity.ToTimeFrameTableEntity(startDate), ETag.All, TableUpdateMode.Merge);
                 }
             }
         }

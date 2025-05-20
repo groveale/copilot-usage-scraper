@@ -39,7 +39,7 @@ namespace groveale.Models
 
         public TableEntity ToAllTimeTableEntity()
         {
-            PartitionKey = AllTimePartitionKeyPrefix + AgentId;
+            PartitionKey = $"{AllTimePartitionKeyPrefix}-{AgentId}";
             RowKey = UPN;
 
             return new TableEntity(PartitionKey, RowKey)
