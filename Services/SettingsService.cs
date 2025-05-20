@@ -20,9 +20,9 @@ namespace groveale.Services
 
     public class SettingsService : ISettingsService
     {
-        public string TenantId => Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
-        public string ClientId => Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
-        public string ClientSecret => Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
+        public string TenantId => Environment.GetEnvironmentVariable("GRAPH_TENANT_ID");
+        public string ClientId => Environment.GetEnvironmentVariable("GRAPH_CLIENT_ID");
+        public string ClientSecret => Environment.GetEnvironmentVariable("GRAPH_CLIENT_SECRET");
         public string AzureFunctionsEnvironment => Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT");
         public string KeyVaultUrl => Environment.GetEnvironmentVariable("KeyVault:Url");
         public string KeyVaultSecretName => Environment.GetEnvironmentVariable("KeyVault:SecretName");

@@ -31,9 +31,9 @@ namespace groveale.Services
             //_defaultCredential = new DefaultAzureCredential();
 
              _clientSecretCredential = new ClientSecretCredential(
-                System.Environment.GetEnvironmentVariable("AZURE_TENANT_ID"), 
-                System.Environment.GetEnvironmentVariable("AZURE_CLIENT_ID"),
-                System.Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET"));
+                System.Environment.GetEnvironmentVariable("GRAPH_TENANT_ID"), 
+                System.Environment.GetEnvironmentVariable("GRAPH_CLIENT_ID"),
+                System.Environment.GetEnvironmentVariable("GRAPH_CLIENT_SECRET"));
 
             _graphServiceClient = new GraphServiceClient(_clientSecretCredential,
                 // Use the default scope, which will request the scopes

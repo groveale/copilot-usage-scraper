@@ -40,11 +40,13 @@ namespace groveale
                 return new BadRequestObjectResult("Please pass a tenantId on the query string or in the request body");
             }
             
-            // Create Encyption Service
-            var encryptionService = await DeterministicEncryptionService.CreateAsync(_settingsService, _keyVaultService);
+            
 
             try
             {
+                // Create Encyption Service
+                var encryptionService = await DeterministicEncryptionService.CreateAsync(_settingsService, _keyVaultService);
+
                 // Seed daily activities for a tenant
                 await _userActivitySeeder.SeedDailyActivitiesAsync(tenantId, encryptionService);
                 await _userActivitySeeder.SeedWeeklyActivitiesAsync(tenantId, encryptionService);
@@ -55,7 +57,9 @@ namespace groveale
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error seeding activities");
+                _logger.LogError(ex, "Error processing usage data. {Message}", ex.Message);
+                _logger.LogError(ex, "Error processing usage data. {StackTrace}", ex.StackTrace);
+            
                 return new BadRequestObjectResult("Error seeding activities");
             }
 
