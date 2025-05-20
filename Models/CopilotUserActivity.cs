@@ -61,6 +61,8 @@ public class UserActivity : BaseTableEntity
 
     public bool DailyWebPluginActivity { get; set; }
     public int DailyWebPluginInteractions { get; set; }
+    public bool DailyAgentActivity { get; set; }
+    public int DailyAgentInteractions { get; set; }
 
     // Converts the UserActivity object to a TableEntity
     public TableEntity ToTableEntity()
@@ -107,7 +109,9 @@ public class UserActivity : BaseTableEntity
             { nameof(DailyCopilotActionActivity), DailyCopilotActionActivity },
             { nameof(DailyCopilotActionCount), DailyCopilotActionCount },
             { nameof(DailyWebPluginActivity), DailyWebPluginActivity },
-            { nameof(DailyWebPluginInteractions), DailyWebPluginInteractions }
+            { nameof(DailyWebPluginInteractions), DailyWebPluginInteractions },
+            { nameof(DailyAgentActivity), DailyAgentActivity },
+            { nameof(DailyAgentInteractions), DailyAgentInteractions }
         };
     }
 }

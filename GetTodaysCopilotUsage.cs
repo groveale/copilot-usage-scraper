@@ -1,4 +1,5 @@
 using System;
+using groveale;
 using groveale.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
@@ -11,13 +12,15 @@ namespace groverale
         private readonly IGraphService _graphService;
         private readonly ISettingsService _settingsService;
         private readonly ICopilotUsageSnapshotService _storageSnapshotService;
+        private readonly IKeyVaultService _keyVaultService;
 
 
-        public GetTodaysCopilotUsage(ILoggerFactory loggerFactory, IGraphService graphService, ISettingsService settingsService, ICopilotUsageSnapshotService storageSnapshotService)
+        public GetTodaysCopilotUsage(ILoggerFactory loggerFactory, IGraphService graphService, ISettingsService settingsService, ICopilotUsageSnapshotService storageSnapshotService, IKeyVaultService keyVaultService)
         {
             _graphService = graphService;
             _settingsService = settingsService;
             _storageSnapshotService = storageSnapshotService;
+            _keyVaultService = keyVaultService;
             _logger = loggerFactory.CreateLogger<GetTodaysCopilotUsage>();
         }
 
@@ -73,8 +76,14 @@ namespace groverale
                     return;
                 }
 
-                var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(copilotUsageData);
+                // Create Encyption Service
+                var encryptionService = await DeterministicEncryptionService.CreateAsync(_settingsService, _keyVaultService);
+
+                var recordsAdded = await _storageSnapshotService.ProcessUserDailySnapshots(copilotUsageData, encryptionService);
                 _logger.LogInformation($"Records added: {recordsAdded}");
+
+                // aggregate agent usage data - 1 row per agent (weekly, monthly, all time)
+                // TODO
             }
             catch (Exception ex)
             {

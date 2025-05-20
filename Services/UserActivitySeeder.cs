@@ -243,18 +243,18 @@ namespace groveale.Services
 
             // Get all users
             var random = new Random();
-            var activities = new List<AllTimeUsage>();
+            var activities = new List<CopilotTimeFrameUsage>();
 
             foreach (var (upn, displayName) in users)
             {
                 foreach (var app in Enum.GetValues(typeof(AppType)).Cast<AppType>())
                 {
                     // Create a simple activity entry with random boolean values
-                    var activity = new AllTimeUsage
+                    var activity = new CopilotTimeFrameUsage
                     {
                         UPN = upn,
                         App = app,
-                        DailyAllTimeActivityCount = random.Next(100),
+                        TotalDailyActivityCount = random.Next(100),
                         BestDailyStreak = random.Next(30),
                         CurrentDailyStreak = random.Next(30)
                     };

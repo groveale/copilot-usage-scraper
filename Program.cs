@@ -20,6 +20,7 @@ builder.Services.AddSingleton<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<ICopilotUsageSnapshotService, CopilotUsageSnapshotService>();
 builder.Services.AddSingleton<IQueueService, QueueService>();
 builder.Services.AddSingleton<IUserActivitySeeder, UserActivitySeeder>();
+builder.Services.AddSingleton<IKeyVaultService, KeyVaultService>();
 
 // For the auth hack
 builder.Services.AddSingleton<ITokenService, TokenService>();

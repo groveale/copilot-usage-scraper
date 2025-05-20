@@ -1,28 +1,43 @@
 using Azure.Data.Tables;
 using groveale.Models;
 
-public class AllTimeUsage : BaseTableEntity
+public class CopilotTimeFrameUsage : BaseTableEntity
 {
+    public const string AllTimePartitionKeyPrefix = "allTime";
     public string UPN { get; set; }
     // CopilotAllUp / CopilotChat / Teams / Outlook / Word / Excel / PowerPoint / OneNote / Loop
-    public AppType App {get; set; }
+    public AppType App { get; set; }
     // Copilot all up
-    public int DailyAllTimeActivityCount { get; set; }
+    public int TotalDailyActivityCount { get; set; }
     public int BestDailyStreak { get; set; }
     public int CurrentDailyStreak { get; set; }
-    public int AllTimeInteractionCount { get; set; }
+    public int TotalInteractionCount { get; set; }
 
-    public TableEntity ToTableEntity()
+    public TableEntity ToAllTimeTableEntity()
     {
-        PartitionKey = UPN;
-        RowKey = App.ToString();
+        PartitionKey = AllTimePartitionKeyPrefix + App.ToString();
+        RowKey = UPN;
 
         return new TableEntity(PartitionKey, RowKey)
         {
-            { nameof(DailyAllTimeActivityCount), DailyAllTimeActivityCount },
+            { nameof(TotalDailyActivityCount), TotalDailyActivityCount },
             { nameof(CurrentDailyStreak), CurrentDailyStreak },
             { nameof(BestDailyStreak), BestDailyStreak },
-            { nameof(AllTimeInteractionCount), AllTimeInteractionCount }
+            { nameof(TotalInteractionCount), TotalInteractionCount }
+        };
+    }
+
+    public TableEntity ToTimeFrameTableEntity(string stringStartDate)
+    {
+        PartitionKey = stringStartDate + App.ToString();
+        RowKey = UPN;
+
+        return new TableEntity(PartitionKey, RowKey)
+        {
+            { nameof(TotalDailyActivityCount), TotalDailyActivityCount },
+            { nameof(CurrentDailyStreak), CurrentDailyStreak },
+            { nameof(BestDailyStreak), BestDailyStreak },
+            { nameof(TotalInteractionCount), TotalInteractionCount }
         };
     }
 
@@ -30,6 +45,7 @@ public class AllTimeUsage : BaseTableEntity
     {
         return App.ToString();
     }
+    
 }
 
 public enum AppType
@@ -51,6 +67,8 @@ public enum AppType
     Stream,
     Forms,
     CopilotAction,
-    WebPlugin
+    WebPlugin,
+    Agent,
+    CopilotStudio
 }
 

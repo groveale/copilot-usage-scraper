@@ -28,6 +28,7 @@ public class TimeFrameUsage : BaseTableEntity
     public int DailyFormsActivityCount { get; set; }
     public int DailyCopilotActionActivityCount { get; set; }
     public int DailyWebPluginActivityCount { get; set; }
+    public int DailyAgentActivityCount { get; set; }
 
     // Interaction Counts
     public int TeamsInteractionCount { get; set; }
@@ -48,6 +49,8 @@ public class TimeFrameUsage : BaseTableEntity
     public int CopilotActionInteractionCount { get; set; }
     public int WebPluginInteractionCount { get; set; }
     public int AllInteractionCount { get; set; }
+    
+    public int AgentInteractionCount { get; set; }
 
     public TableEntity ToTableEntity()
     {
@@ -75,6 +78,7 @@ public class TimeFrameUsage : BaseTableEntity
             { nameof(DailyFormsActivityCount), DailyFormsActivityCount },
             { nameof(DailyCopilotActionActivityCount), DailyCopilotActionActivityCount },
             { nameof(DailyWebPluginActivityCount), DailyWebPluginActivityCount },
+            { nameof(DailyAgentActivityCount), DailyAgentActivityCount },
             { nameof(TeamsInteractionCount), TeamsInteractionCount },
             { nameof(CopilotChatInteractionCount), CopilotChatInteractionCount },
             { nameof(OutlookInteractionCount), OutlookInteractionCount },
@@ -92,7 +96,8 @@ public class TimeFrameUsage : BaseTableEntity
             { nameof(FormsInteractionCount), FormsInteractionCount },
             { nameof(CopilotActionInteractionCount), CopilotActionInteractionCount },
             { nameof(WebPluginInteractionCount), WebPluginInteractionCount },
-            { nameof(AllInteractionCount), AllInteractionCount }
+            { nameof(AllInteractionCount), AllInteractionCount },
+            { nameof(AgentInteractionCount), AgentInteractionCount }
         };
     }
 }
