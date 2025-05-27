@@ -10,11 +10,15 @@ namespace groveale
     {
         private readonly ILogger<GetUsersWithStreak> _logger;
         private readonly ICopilotUsageSnapshotService _copilotUsageSnapshotService;
+        private readonly ISettingsService _settingsService;
+        private readonly IKeyVaultService _keyVaultService;
 
-        public GetUsersWithStreak(ILogger<GetUsersWithStreak> logger, ICopilotUsageSnapshotService copilotUsageSnapshotService)
+        public GetUsersWithStreak(ILogger<GetUsersWithStreak> logger, ICopilotUsageSnapshotService copilotUsageSnapshotService, ISettingsService settingsService, IKeyVaultService keyVaultService)
         {
             _logger = logger;
             _copilotUsageSnapshotService = copilotUsageSnapshotService;
+            _settingsService = settingsService;
+            _keyVaultService = keyVaultService;
         }
 
         [Function("GetUsersWithStreak")]
@@ -53,19 +57,70 @@ namespace groveale
                 return new BadRequestObjectResult("Please pass a valid integer for the count parameter");
             }
 
+            List<string> usersThatHaveAchieved = new List<string>();
+
             try
             {
                 // Get users with streak
-                var users = await _copilotUsageSnapshotService.GetUsersWithStreak(appList, countValue);
+                if (appList.Count == 1)
+                {
+                    var usersWithAppStreak = await _copilotUsageSnapshotService.GetUsersWithStreakForApp(appList.FirstOrDefault(), countValue);
+                    usersThatHaveAchieved = usersWithAppStreak;
+                }
+                else
+                {
 
-                return new OkObjectResult(users);
+                    HashSet<string> intersection = null;
+
+                    foreach (var app in appList)
+                    {
+                        var usersWithAppStreak = await _copilotUsageSnapshotService.GetUsersWithStreakForApp(app, countValue);
+                        var currentUsers = new HashSet<string>(usersWithAppStreak);
+
+                        // Early exit: if any app has no qualifying users, final result will be empty
+                        if (!currentUsers.Any())
+                        {
+                            usersThatHaveAchieved = new List<string>();
+                            break;
+                        }
+
+                        if (intersection == null)
+                        {
+                            // First app - initialize intersection
+                            intersection = currentUsers;
+                        }
+                        else
+                        {
+                            // Subsequent apps - intersect with existing set
+                            intersection.IntersectWith(currentUsers);
+
+                            // Early exit: if intersection becomes empty, no point continuing
+                            if (!intersection.Any())
+                            {
+                                usersThatHaveAchieved = new List<string>();
+                                break;
+                            }
+                        }
+                    }
+
+                    usersThatHaveAchieved = intersection?.ToList() ?? new List<string>();
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred while processing the request.");
                 return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
-           
+
+            // Decrypt the users that have achieved
+            if (usersThatHaveAchieved.Any())
+            {
+                // Create Encyption Service
+                var encryptionService = await DeterministicEncryptionService.CreateAsync(_settingsService, _keyVaultService);
+                usersThatHaveAchieved = usersThatHaveAchieved.Select(encryptionService.Decrypt).ToList();
+            }
+
+            return new OkObjectResult(usersThatHaveAchieved);
 
         }
     }

@@ -30,16 +30,16 @@ namespace groveale.Services
         {
             //_defaultCredential = new DefaultAzureCredential();
 
-             _clientSecretCredential = new ClientSecretCredential(
-                System.Environment.GetEnvironmentVariable("GRAPH_TENANT_ID"), 
-                System.Environment.GetEnvironmentVariable("GRAPH_CLIENT_ID"),
-                System.Environment.GetEnvironmentVariable("GRAPH_CLIENT_SECRET"));
+            _clientSecretCredential = new ClientSecretCredential(
+               System.Environment.GetEnvironmentVariable("GRAPH_TENANT_ID"),
+               System.Environment.GetEnvironmentVariable("GRAPH_CLIENT_ID"),
+               System.Environment.GetEnvironmentVariable("GRAPH_CLIENT_SECRET"));
 
             _graphServiceClient = new GraphServiceClient(_clientSecretCredential,
                 // Use the default scope, which will request the scopes
                 // configured on the app registration
-                new[] {"https://graph.microsoft.com/.default"});
-     }
+                new[] { "https://graph.microsoft.com/.default" });
+        }
 
 
         public async Task GetTodaysCopilotUsageDataAsync()
@@ -96,8 +96,8 @@ namespace groveale.Services
                 {
                     // Check if user has activity in Teams, Outlook or SharePoint
                     if (usr.TeamsLastActivityDate.GetValueOrDefault().DateTime == usr.ReportRefreshDate.GetValueOrDefault().DateTime ||
-                        usr.ExchangeLastActivityDate.GetValueOrDefault().DateTime  == usr.ReportRefreshDate.GetValueOrDefault().DateTime  ||
-                        usr.SharePointLastActivityDate.GetValueOrDefault().DateTime  == usr.ReportRefreshDate.GetValueOrDefault().DateTime )
+                        usr.ExchangeLastActivityDate.GetValueOrDefault().DateTime == usr.ReportRefreshDate.GetValueOrDefault().DateTime ||
+                        usr.SharePointLastActivityDate.GetValueOrDefault().DateTime == usr.ReportRefreshDate.GetValueOrDefault().DateTime)
                     {
                         // Add the user to the list
                         copilotUsers.Add(usr.UserPrincipalName, true);
@@ -132,7 +132,8 @@ namespace groveale.Services
             int bytesRead;
             List<M365CopilotUsage> m365CopilotUsageReports = new List<M365CopilotUsage>();
 
-            do {
+            do
+            {
 
                 string usageReportsInChunk = "";
 
@@ -156,7 +157,7 @@ namespace groveale.Services
 
                     if (doc.RootElement.TryGetProperty("@odata.nextLink", out JsonElement nextLinkElement))
                     {
-                        urlString = nextLinkElement.GetString(); 
+                        urlString = nextLinkElement.GetString();
                     }
                     else
                     {

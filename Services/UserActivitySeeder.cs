@@ -119,7 +119,8 @@ namespace groveale.Services
                     {
                         UPN = encryptionService.Encrypt(upn),
                         App = app,
-                        TotalDailyActivityCount = random.Next(100),
+                        TotalDailyActivityCount = random.Next(30),
+                        TotalInteractionCount = random.Next(1000),
                         BestDailyStreak = random.Next(30),
                         CurrentDailyStreak = random.Next(30)
                     };
@@ -161,7 +162,8 @@ namespace groveale.Services
                     {
                         UPN = encryptionService.Encrypt(upn),
                         App = app,
-                        TotalDailyActivityCount = random.Next(50),
+                        TotalDailyActivityCount = random.Next(5),
+                        TotalInteractionCount = random.Next(100),
                         BestDailyStreak = random.Next(5),
                         CurrentDailyStreak = random.Next(5)
                     };
@@ -196,7 +198,8 @@ namespace groveale.Services
                     {
                         UPN = encryptionService.Encrypt(upn),
                         App = app,
-                        TotalDailyActivityCount = random.Next(5000),
+                        TotalInteractionCount = random.Next(5000),
+                        TotalDailyActivityCount = random.Next(100),
                         BestDailyStreak = random.Next(100),
                         CurrentDailyStreak = random.Next(100)
                     };

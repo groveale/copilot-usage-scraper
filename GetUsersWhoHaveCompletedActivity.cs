@@ -12,12 +12,14 @@ namespace groveale
         private readonly ILogger<GetUsersWhoHaveCompletedActivity> _logger;
         private readonly ISettingsService _settingsService;
         private readonly ICopilotUsageSnapshotService _storageSnapshotService;
+        private readonly IKeyVaultService _keyVaultService;
 
-        public GetUsersWhoHaveCompletedActivity(ILogger<GetUsersWhoHaveCompletedActivity> logger, ISettingsService settingsService, ICopilotUsageSnapshotService storageSnapshotService)
+        public GetUsersWhoHaveCompletedActivity(ILogger<GetUsersWhoHaveCompletedActivity> logger, ISettingsService settingsService, ICopilotUsageSnapshotService storageSnapshotService, IKeyVaultService keyVaultService)
         {
             _logger = logger;
             _settingsService = settingsService;
             _storageSnapshotService = storageSnapshotService;
+            _keyVaultService = keyVaultService;
         }
 
         [Function("GetUsersWhoHaveCompletedActivity")]
@@ -27,7 +29,8 @@ namespace groveale
 
             // Get params, app, count, timeFrame, and startdate (optional)
 
-            string count = req.Query["count"];
+            string dayCount = req.Query["dayCount"];
+            string interactionCount = req.Query["interactionCount"];
             string timeFrame = req.Query["timeFrame"];
             string startDate = req.Query["startDate"];
             string demo = req.Query["demo"];
@@ -35,11 +38,12 @@ namespace groveale
             // also check in the body
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
-            count = count ?? data?.count;
+            dayCount = dayCount ?? data?.dayCount;
+            interactionCount = interactionCount ?? data?.interactionCount;
             timeFrame = timeFrame ?? data?.timeFrame;
             startDate = startDate ?? data?.startDate;
             demo = demo ?? data?.demo;
-            
+
 
             // Handle app parameter as an array or a comma-separated string
             List<string> appList;
@@ -55,9 +59,9 @@ namespace groveale
 
 
             // Validate params
-            if (appList == null || !appList.Any() || string.IsNullOrEmpty(count) || string.IsNullOrEmpty(timeFrame))
+            if (appList == null || !appList.Any() || (string.IsNullOrEmpty(dayCount) && string.IsNullOrEmpty(interactionCount)) || string.IsNullOrEmpty(timeFrame))
             {
-                return new BadRequestObjectResult("Please pass a app, count, and timeFrame on the query string or body");
+                return new BadRequestObjectResult("Please pass an app, dayCount and/or interactionCount, and timeFrame on the query string or body");
             }
 
             timeFrame = timeFrame.ToLower();
@@ -65,7 +69,7 @@ namespace groveale
             // Further validation
             if (timeFrame != "alltime" && string.IsNullOrEmpty(startDate))
             {
-                return new BadRequestObjectResult("Please pass a app, count, timeFrame, and startDate on the query string or body");
+                return new BadRequestObjectResult("Please pass a app, dayCount and/or interactionCount, timeFrame, and startDate on the query string or body");
             }
 
 
@@ -88,11 +92,54 @@ namespace groveale
             {
                 try
                 {
-                    // Get users who have completed the activity
-                    var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivity(appList, count, timeFrame, startDate);
-                    //var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivity(appList[0], count, timeFrame, startDate);
 
-                    usersThatHaveAchieved = users;
+
+                    if (appList.Count == 1)
+                    {
+                        // a simple one app challenge
+                        var users = await _storageSnapshotService.GetUsersWhoHaveCompletedActivityForApp(appList.FirstOrDefault(), dayCount, interactionCount, timeFrame, startDate);
+                        usersThatHaveAchieved = users;
+                    }
+                    else
+                    {
+                        // we need to have multiple queries
+                        // Most efficient approach using HashSet for O(1) lookups
+
+                        HashSet<string> intersection = null;
+
+                        foreach (var app in appList)
+                        {
+                            var usersForApp = await _storageSnapshotService.GetUsersWhoHaveCompletedActivityForApp(app, dayCount, interactionCount, timeFrame, startDate);
+                            var currentUsers = new HashSet<string>(usersForApp);
+
+                            // Early exit: if any app has no qualifying users, final result will be empty
+                            if (!currentUsers.Any())
+                            {
+                                usersThatHaveAchieved = new List<string>();
+                                break; 
+                            }
+
+                            if (intersection == null)
+                            {
+                                // First app - initialize intersection
+                                intersection = currentUsers;
+                            }
+                            else
+                            {
+                                // Subsequent apps - intersect with existing set
+                                intersection.IntersectWith(currentUsers);
+
+                                // Early exit: if intersection becomes empty, no point continuing
+                                if (!intersection.Any())
+                                {
+                                    usersThatHaveAchieved = new List<string>();
+                                    break;
+                                }
+                            }
+                        }
+
+                        usersThatHaveAchieved = intersection?.ToList() ?? new List<string>();
+                    }
 
                 }
                 catch (Exception ex)
@@ -117,6 +164,14 @@ namespace groveale
                     startDateStatus = "Future";
                 }
 
+            }
+
+            // Decrypt the users that have achieved
+            if (usersThatHaveAchieved.Any())
+            {
+                // Create Encyption Service
+                var encryptionService = await DeterministicEncryptionService.CreateAsync(_settingsService, _keyVaultService);
+                usersThatHaveAchieved = usersThatHaveAchieved.Select(encryptionService.Decrypt).ToList();
             }
 
             return new OkObjectResult(new { Users = usersThatHaveAchieved, StartDateStatus = startDateStatus });

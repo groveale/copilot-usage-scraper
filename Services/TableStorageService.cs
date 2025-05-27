@@ -26,13 +26,15 @@ namespace groveale.Services
         Task<List<InactiveUser>> GetInactiveUsers(int days);
         Task<List<string>> GetUsersWithStreak(List<string> apps, int count);
 
+        Task<List<string>> GetUsersWithStreakForApp(string app, int count);
+
         // For Seeding
         Task SeedDailyActivitiesAsync(List<UserActivity> userActivitiesSeed);
         Task SeedMonthlyFrameActivitiesAsync(List<CopilotTimeFrameUsage> userActivitiesSeed, string startDate);
         Task SeedWeeklyTimeFrameActivitiesAsync(List<CopilotTimeFrameUsage> userActivitiesSeed, string startDate);
         Task SeedAllTimeActivityAsync(List<CopilotTimeFrameUsage> userActivitiesSeed);
         Task SeedInactiveUsersAsync(List<InactiveUser> inactiveUsersSeed);
-
+        Task<List<string>> GetUsersWhoHaveCompletedActivityForApp(string app, string? dayCount, string? interactionCount, string timeFrame, string? startDate);
     }
 
     public class CopilotUsageSnapshotService : ICopilotUsageSnapshotService
@@ -255,7 +257,7 @@ namespace groveale.Services
                 var dailyAgentData = await GetDailyAgentDataForUser(userEntity.UPN, userEntity.ReportDate.ToString("yyyy-MM-dd"));
 
 
-            
+
 
 
                 // We need to update the  weekly, monthly and alltime tables
@@ -576,7 +578,7 @@ namespace groveale.Services
                             TotalDailyActivityCount = 1,
                             TotalInteractionCount = interactionCount,
                             CurrentDailyStreak = 1,
-                            BestDailyStreak = 1 
+                            BestDailyStreak = 1
                         };
 
                         if (timeFrame == "alltime")
@@ -826,8 +828,11 @@ namespace groveale.Services
                 _ => throw new ArgumentException("Invalid timeFrame")
             };
 
+
             // For monthly (and other timeframes except daily and alltime)
             string appsFilterString = string.Join(" and ", apps.Select(app => $"Daily{app}ActivityCount ge {count}"));
+
+
             string filter = $"PartitionKey eq '{date}' and {appsFilterString}";
 
             // Define the query filter for daily
@@ -885,6 +890,54 @@ namespace groveale.Services
 
             // return some users for testing
             return users;
+        }
+
+        public async Task<List<string>> GetUsersWhoHaveCompletedActivityForApp(string app, string? dayCount, string? interactionCount, string timeFrame, string date)
+        {
+            // switch statement to get the correct table on timeFrame
+            var tableClient = timeFrame.ToLowerInvariant() switch
+            {
+                "weekly" => _userWeeklyTableClient,
+                "monthly" => _userMonthlyTableClient,
+                "alltime" => _userAllTimeTableClient,
+                _ => throw new ArgumentException("Invalid timeFrame")
+            };
+
+            // Define the query filter
+            string filter = $"PartitionKey eq '{date}-{app}'";
+
+            if (!string.IsNullOrEmpty(dayCount))
+            {
+                filter += $" and TotalDailyActivityCount ge {dayCount}";
+            }
+
+            if (!string.IsNullOrEmpty(interactionCount))
+            {
+                filter += $" and TotalInteractionCount ge {interactionCount}";
+            }
+
+            // log the filter
+            _logger.LogInformation($"Filter for {timeFrame}: {filter}");
+
+            // Get the users
+            var users = new List<string>();
+            try
+            {
+                // Query all records with filter
+                AsyncPageable<TableEntity> queryResults = tableClient.QueryAsync<TableEntity>(filter);
+
+                await foreach (TableEntity entity in queryResults)
+                {
+                    users.Add(entity.RowKey);
+                }
+            }
+            catch (RequestFailedException ex)
+            {
+                Console.WriteLine($"Error retrieving records: {ex.Message}");
+            }
+
+            return users;
+
         }
         static string GetWeekStartDate(DateTime date)
         {
@@ -1086,6 +1139,34 @@ namespace groveale.Services
             var groupedUsers = users.GroupBy(u => u).Select(g => new { UPN = g.Key, Count = g.Count() }).ToList();
             // filter the users to only those with a streak for all apps
             users = groupedUsers.Where(g => g.Count == apps.Count).Select(g => g.UPN).ToList();
+            return users;
+        }
+
+        public async Task<List<string>> GetUsersWithStreakForApp(string app, int count)
+        {
+            // users
+            var users = new List<string>();
+
+            // build the query filter
+            string filter = $"PartitionKey eq '{CopilotTimeFrameUsage.AllTimePartitionKeyPrefix}-{app}' and CurrentDailyStreak ge {count}";
+
+            _logger.LogInformation($"Filter: {filter}");
+
+            try
+            {
+                var queryResults = _userAllTimeTableClient.QueryAsync<TableEntity>(filter);
+
+                await foreach (TableEntity entity in queryResults)
+                {
+                    users.Add(entity.RowKey);
+                }
+            }
+            catch (RequestFailedException ex)
+            {
+                Console.WriteLine($"Error retrieving records: {ex.Message}");
+
+            }
+
             return users;
         }
 
